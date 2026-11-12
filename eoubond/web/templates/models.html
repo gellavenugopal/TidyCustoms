@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+{% include "_masters_nav.html" %}
+<h1>Finished-goods models &amp; BOMs</h1>
+<p class="sub">Each BOM version lists components (unique code, qty per unit) and an effective date. Production uses the latest version effective on the production date.</p>
+{% if can_edit %}
+<div class="actions"><a class="btn" href="{{ url_for('main.doc_upload', kind='boms') }}">Upload BOMs from Excel</a>
+  <a class="btn secondary" href="{{ url_for('main.doc_blank', kind='boms') }}">Download BOM template</a></div>
+<form method="post" class="panel">{{ csrf() }}
+  <div class="grid"><div><label>Model code *</label><input name="code" required placeholder="4343-GEN5"></div>
+    <div style="grid-column: span 2"><label>Name *</label><input name="name" required placeholder="4343 Gen5 flat panel detector"></div></div>
+  <div class="actions"><button>Add model</button></div>
+</form>
+{% endif %}
+{% for m in models %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ m.code }} <span class="muted">- {{ m.name }}</span></h2>
+  <table>
+    <thead><tr><th>Version</th><th>Effective from</th><th class="n">Components</th><th>Remarks</th><th>Created</th></tr></thead>
+    <tbody>{% for b in m.boms|reverse %}
+      <tr><td><a href="{{ url_for('main.bom_view', bom_id=b.id) }}">v{{ b.version }}</a></td><td>{{ b.effective_from|dt }}</td>
+          <td class="n">{{ b.lines|length }}</td><td>{{ b.remarks or '' }}</td><td class="muted">{{ b.created_by }} {{ b.created_at|dt }}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">No BOM yet.</td></tr>{% endfor %}</tbody>
+  </table>
+  {% if can_edit %}<div class="actions"><a class="btn secondary" href="{{ url_for('main.bom_new', model_id=m.id) }}">New BOM version</a></div>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}

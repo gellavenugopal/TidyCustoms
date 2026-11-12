@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Reports</h1>
+<p class="sub">Every report can be downloaded as Excel. Reports that take a bond use the working bond selected in the top bar unless you choose another.</p>
+<div class="cards">
+  <div class="card"><div class="v" style="font-size:16px">Working file - formulas &amp; links</div>
+    <div class="muted">Bonds, monthly summary, ledger, stock by bond, DTA duty. Every figure is a formula over the source rows, so the workings are visible.</div>
+    <div class="actions"><a href="{{ url_for('main.report_working') }}">Download Excel</a></div></div>
+  <div class="card"><div class="v" style="font-size:16px">Form III quarterly return</div>
+    <div class="muted">Six-sheet .xls in the filing layout</div>
+    <div class="actions"><a href="{{ url_for('main.form3_return') }}">Prepare return</a></div></div>
+  {% for key, (title, _) in reports.items() %}
+  <div class="card"><div class="v" style="font-size:16px">{{ title }}</div>
+    <div class="actions"><a href="{{ url_for('main.report', name=key) }}">View</a> · <a href="{{ url_for('main.report', name=key, format='xlsx') }}">Excel</a></div></div>
+  {% endfor %}
+  <div class="card"><div class="v" style="font-size:16px">All reports (one workbook)</div>
+    <div class="actions"><a href="{{ url_for('main.report_all') }}">Download Excel</a></div></div>
+</div>
+{% endblock %}

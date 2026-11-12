@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+<h1>Import {{ inv.invoice_no }} <span class="tag {{ inv.status }}">{{ inv.status }}</span></h1>
+<p class="sub">{{ inv.supplier.name }} · invoice date {{ inv.invoice_date|dt }} · {% if inv.duty_paid %}<span class="tag">DUTY PAID</span> no bond - posting debits nothing{% else %}bond <b>{{ inv.bond.bond_no }}</b> (balance {{ inv.bond.balance|money }}){% endif %}
+  {% if inv.be_no %} · BE {{ inv.be_no }} {{ inv.be_date|dt }} ({{ inv.port_of_import or 'no port' }}, invoice #{{ inv.be_invoice_serial }}){% endif %}
+  {% if inv.clearance_date %} · OOC {{ inv.clearance_date|dt }}{% endif %}{% if inv.receipt_date %} · received {{ inv.receipt_date|dt }}{% endif %}
+  {% if inv.posted_by %} · posted by {{ inv.posted_by }}{% endif %}</p>
+
+{% if inv.status == 'DRAFT' and unmapped %}
+<div class="note">{{ unmapped|length }} description(s) are not mapped to an internal code. Choose a code for each and save; the choice is stored in the mapping table and used for future imports.</div>
+{% endif %}
+
+<form method="post">{{ csrf() }}
+<div class="table-wrap"><table>
+  <thead><tr><th>#</th><th>Supplier description</th><th>Item code</th>{% if inv.status=='DRAFT' and can_edit %}<th>Remember for</th>{% endif %}<th class="n">Qty</th><th class="n">Assessable value</th><th class="n">{{ 'Duty paid' if inv.duty_paid else 'Duty saved' }}</th></tr></thead>
+  <tbody>
+  {% for l in inv.lines %}
+    <tr><td>{{ l.line_no }}</td><td>{{ l.description }}<div class="muted mono">{{ l.normalized_description }}</div></td>
+      <td>{% if inv.status=='DRAFT' and can_edit %}
+            <select name="map_{{ l.id }}"><option value="">{{ '- choose -' if not l.item_id else '' }}</option>
+            {% for it in items %}<option value="{{ it.id }}" {{ 'selected' if l.item_id == it.id }}>{{ it.code }} - {{ it.description }}</option>{% endfor %}</select>
+            {% if not l.item_id %}<span class="tag UNMAPPED">unmapped</span>{% endif %}
+          {% else %}{{ l.item.code if l.item else '' }}{% endif %}</td>
+      {% if inv.status=='DRAFT' and can_edit %}<td><select name="scope_{{ l.id }}"><option value="supplier">this supplier</option><option value="global">all suppliers</option></select></td>{% endif %}
+      <td class="n">{{ l.qty|qty }}{% if l.qty_received is not none and l.qty_received != l.qty %}<div class="muted">received {{ l.qty_received|qty }}</div>{% endif %}</td>
+      <td class="n">{{ l.assessable_value|money }}</td>
+      <td class="n">{{ (l.duty_total if inv.duty_paid else l.duty_saved_value)|money }}{% if l.has_duty_split %}<div class="muted">BCD {{ l.bcd_forgone|money }} · SWS {{ l.sws_forgone|money }} · IGST {{ l.igst_forgone|money }}{% if l.cess_forgone %} · cess {{ l.cess_forgone|money }}{% endif %}{% if l.other_forgone %} · other {{ l.other_forgone|money }}{% endif %}</div>{% else %}<div class="muted">no duty split</div>{% endif %}</td></tr>
+  {% endfor %}
+  <tr class="total"><td colspan="{{ 6 if inv.status=='DRAFT' and can_edit else 5 }}">{{ 'Total duty paid (no bond debit)' if inv.duty_paid else 'Total debit to bond' }}</td><td class="n">{{ (inv.total_duty if inv.duty_paid else inv.total_dsv)|money }}</td></tr>
+  </tbody>
+</table></div>
+{% if can_edit %}
+<div class="actions">
+  {% if inv.status == 'DRAFT' %}
+    <button class="secondary" name="action" value="resolve">Save mappings</button>
+    {% if inv.duty_paid %}
+    <button name="action" value="post" data-confirm="Post this duty-paid import? The bond is not debited." {{ 'disabled' if unmapped }}>Post (duty paid - no bond debit)</button>
+    {% else %}
+    <button name="action" value="post" data-confirm="Post this import and debit {{ inv.total_dsv|money }} from bond {{ inv.bond.bond_no }}?" {{ 'disabled' if unmapped }}>Post &amp; debit bond</button>
+    {% endif %}
+    <button class="danger" name="action" value="delete" data-confirm="Delete this draft?">Delete draft</button>
+  {% elif inv.status == 'POSTED' %}
+    <button class="danger" name="action" value="cancel" data-confirm="Cancel this import and recredit the bond? Only possible if none of its stock has been used.">Cancel import</button>
+  {% endif %}
+</div>
+{% endif %}
+</form>
+<div class="actions"><a href="{{ url_for('main.imports') }}">Back to imports</a></div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block title %}Sign in - EOU Bond Tracker{% endblock %}
+{% block body %}
+<div class="panel login">
+  <h1>EOU Bond Tracker</h1>
+  <p class="muted">Duty-saved inventory under bond</p>
+  <form method="post">{{ csrf() }}
+    <p><label>Username</label><input name="username" autofocus required></p>
+    <p><label>Password</label><input name="password" type="password" required></p>
+    <button>Sign in</button>
+  </form>
+</div>
+{% endblock %}

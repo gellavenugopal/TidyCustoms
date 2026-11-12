@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block title %}First-time setup - EOU Bond Tracker{% endblock %}
+{% block body %}
+<div style="max-width:760px; margin:40px auto">
+  <h1>Welcome to EOU Bond Tracker</h1>
+  <p class="sub">This installation has no data yet. Choose one:</p>
+  <div class="cards">
+    <form method="post" enctype="multipart/form-data" class="card">{{ csrf() }}<input type="hidden" name="action" value="restore">
+      <h2 style="margin-top:0">Restore from a backup</h2>
+      <p class="muted">Moving to a new or re-formatted PC? Upload your latest backup .zip to bring back all data, users and rates.</p>
+      <p><input type="file" name="backup_file" accept=".zip" required></p>
+      <p><label><input type="checkbox" name="restore_rules" checked> Also restore business rules (rates)</label></p>
+      <button>Restore everything</button>
+    </form>
+    <form method="post" class="card">{{ csrf() }}<input type="hidden" name="action" value="create">
+      <h2 style="margin-top:0">Start fresh</h2>
+      <p class="muted">Create the first administrator.</p>
+      <p><label>Username</label><input name="username" required></p>
+      <p><label>Full name</label><input name="full_name"></p>
+      <p><label>Password (8+ characters)</label><input type="password" name="password" minlength="8" required></p>
+      <p><label>Repeat password</label><input type="password" name="password2" minlength="8" required></p>
+      <button class="secondary">Create administrator</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

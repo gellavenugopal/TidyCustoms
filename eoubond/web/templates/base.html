@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light only">
+  <title>{% block title %}{{ brand.name }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Lexend:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ asset_url('style.css') }}">
+  <script src="{{ asset_url('lines.js') }}" defer></script>
+</head>
+<body>
+{% if current_user %}
+{% set ep = request.endpoint or '' %}{% set kind_arg = (request.view_args or {}).get('kind') %}
+<header class="topbar"><div class="inner">
+  <a class="brand" href="{{ url_for('main.dashboard') }}">
+    <span class="mark">{{ brand.mark }}</span>
+    <span><span class="name">{{ brand.name }}</span><br><span class="tagline">{{ brand.tagline }}</span></span>
+  </a>
+  {% if brand.credit %}<div class="credit"><small>{{ brand.credit_label }}</small><b>{{ brand.credit }}</b></div>{% endif %}
+  <div class="right">
+    <form method="post" action="{{ url_for('main.select_bond') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <select name="bond_id" onchange="this.form.submit()" title="Working bond (default for entries and reports)" aria-label="Working bond">
+        <option value="">All bonds</option>
+        {% for b in all_bonds %}<option value="{{ b.id }}" {{ 'selected' if b.id == selected_bond_id }}>{{ b.bond_no }}{{ ' (closed)' if b.status == 'CLOSED' }}</option>{% endfor %}
+      </select>
+    </form>
+    <span class="userchip"><span class="av">{{ current_user.username[:1]|upper }}</span>
+      <a href="{{ url_for('main.change_password') }}" style="color:inherit">{{ current_user.username }} · {{ current_user.role }}</a></span>
+    <form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="link">Log out</button></form>
+  </div>
+</div></header>
+<nav class="nav" aria-label="Modules"><div class="inner">
+  {% set masters_eps = ('main.items','main.item_edit','main.suppliers','main.models','main.bom_new','main.bom_view','main.mappings') %}
+  {% set modules = [
+    ('main.dashboard', '◧', 'Dashboard', ep == 'main.dashboard'),
+    ('main.bonds', '⛨', 'Bonds', 'bond' in ep),
+    ('main.imports', '⤓', 'Imports', 'import' in ep or (ep.startswith('main.doc_') and kind_arg == 'imports')),
+    ('main.production', '⚙', 'Production', 'production' in ep),
+    ('main.exports', '⤒', 'Exports', 'export' in ep or (ep.startswith('main.doc_') and kind_arg == 'exports')),
+    ('main.dta', '₹', 'DTA', 'dta' in ep),
+    ('main.reports_index', '▤', 'Reports', 'report' in ep),
+    ('main.form3_return', '☰', 'Form III', ep == 'main.form3_return'),
+    ('main.items', '▦', 'Masters', ep in masters_eps or (ep.startswith('main.doc_') and kind_arg == 'boms')),
+  ] %}
+  {% for endpoint, icon, label, on in modules %}
+  <a href="{{ url_for(endpoint) }}" class="{{ 'on' if on }}" {{ 'aria-current="page"'|safe if on }}><span class="ic" aria-hidden="true">{{ icon }}</span>{{ label }}</a>
+  {% endfor %}
+  {% if is_admin %}
+  <span class="sep" aria-hidden="true"></span>
+  <a href="{{ url_for('main.users') }}" class="{{ 'on' if ep=='main.users' }}"><span class="ic" aria-hidden="true">☺</span>Users</a>
+  <a href="{{ url_for('main.backup_page') }}" class="{{ 'on' if ep=='main.backup_page' }}"><span class="ic" aria-hidden="true">⟲</span>Backup</a>
+  {% endif %}
+</div></nav>
+{% endif %}
+<main>
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}<div class="flash {{ cat }}" role="status">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  {% block body %}{% endblock %}
+</main>
+<div class="viz-tip" id="viz-tip" role="tooltip"></div>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Production</h1>
+<p class="sub">Each batch consumes its BOM components FIFO from duty-saved import lots and creates finished-goods stock.</p>
+{% if can_edit %}<div class="actions"><a class="btn" href="{{ url_for('main.production_new') }}">Record production</a></div>{% endif %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Date</th><th>Batch</th><th>Model</th><th>BOM</th><th class="n">Qty</th><th class="n">In FG stock</th><th class="n">Inputs AV</th><th class="n">Inputs duty saved</th></tr></thead>
+  <tbody>{% for b in batches %}
+  <tr><td>{{ b.production_date|dt }}</td><td><a href="{{ url_for('main.production_view', batch_id=b.id) }}">{{ b.batch_no }}</a></td>
+      <td>{{ b.model.code }}</td><td>v{{ b.bom.version }}</td><td class="n">{{ b.qty|qty }}</td><td class="n">{{ b.fg_lot.qty_available|qty }}</td>
+      <td class="n">{{ b.total_av|money }}</td><td class="n">{{ b.total_dsv|money }}</td></tr>
+  {% else %}<tr><td colspan="8" class="muted">No production yet.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

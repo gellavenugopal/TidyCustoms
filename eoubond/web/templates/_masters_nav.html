@@ -1,0 +1,7 @@
+{% set ep = request.endpoint or '' %}
+<nav class="subnav" aria-label="Masters">
+  <a href="{{ url_for('main.items') }}" class="{{ 'on' if ep in ('main.items', 'main.item_edit') }}"><span aria-hidden="true">▦</span> Items</a>
+  <a href="{{ url_for('main.suppliers') }}" class="{{ 'on' if ep == 'main.suppliers' }}"><span aria-hidden="true">⚑</span> Suppliers</a>
+  <a href="{{ url_for('main.models') }}" class="{{ 'on' if ep in ('main.models', 'main.bom_new', 'main.bom_view') }}"><span aria-hidden="true">◈</span> Models &amp; BOMs</a>
+  <a href="{{ url_for('main.mappings') }}" class="{{ 'on' if ep == 'main.mappings' }}"><span aria-hidden="true">⇄</span> Description mappings</a>
+</nav>

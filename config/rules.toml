@@ -1,0 +1,80 @@
+# ---------------------------------------------------------------------------
+# EOU Bond Tracker - business rules and rates
+#
+# Every value here is an ASSUMPTION that you should confirm with your customs
+# consultant / Development Commissioner office before go-live. See the
+# "Assumptions" section of README.md for the reasoning behind each one.
+#
+# Point the app at a different file with the EOU_RULES_FILE environment variable.
+# ---------------------------------------------------------------------------
+
+[duty]
+# Basic Customs Duty (percent of assessable value) used when the item master
+# has no item-specific BCD rate.                                    [A-DTA-1]
+default_bcd_rate = 10.0
+
+# Social Welfare Surcharge, percent of BCD (not of assessable value). [A-DTA-2]
+sws_rate_on_bcd = 10.0
+
+# Round the payable duty of each DTA clearance line to the nearest rupee
+# (Section 154A practice). false = keep paise.                      [A-DTA-3]
+round_duty_to_rupee = true
+
+[bond]
+# Reject an import whose invoice date falls outside the bond's validity.
+#                                                                    [A-BOND-1]
+reject_import_outside_validity = true
+
+# Allow export / DTA recredits to a bond after its validity has ended (the
+# liability is being discharged, so this is normally allowed).      [A-BOND-2]
+allow_credit_after_expiry = true
+
+# When a DTA clearance recredits the bond:
+#   "payment"   - when the duty is marked paid (default)
+#   "clearance" - as soon as the clearance is recorded
+#   "never"     - DTA clearances never recredit the bond           [A-BOND-3]
+dta_recredit_on = "payment"
+
+# Write zero-value memo entries in the bond ledger for production
+# consumption (shows the duty-saved value moving from raw material into
+# finished goods without changing the balance).                     [A-BOND-4]
+consumption_memo_entries = true
+
+[fifo]
+# "global" - production may consume lots from any bond, oldest first.
+# "bond"   - production must name a bond and consume only its lots. [A-FIFO-1]
+production_scope = "global"
+
+# A lot can only be consumed / shipped on or after its own date.    [A-FIFO-2]
+lot_must_predate_use = true
+
+[form3]
+# Quarterly Form III return (template: "Details of Goods", "Re-Export",
+# "Goods cleared on payment", "Job Worker Unit", "Unit Transfer",
+# "End Use Recipient").
+
+# Report SWS inside the "BCD Forgone" column (as in the filed Q4 return,
+# where BCD Forgone = BCD x 1.1). false = report SWS under
+# "Other Custom Duties Forgone".                                     [A-F3-1]
+sws_in_bcd_column = true
+
+# Accessories / other goods exported as-is from import stock:
+#   "export"    - count as "used for manufacturing goods that are exported" (col V)
+#   "re_export" - count as "re-exported" (col T) and list on the Re-Export sheet
+#                                                                    [A-F3-2]
+item_export_as = "export"
+
+# Inputs already built into finished goods that are not yet exported/sold:
+#   "pending" - still "pending in stock in the importer's premises" (col Z)
+#   "export"  - "used for manufacturing goods that are exported" (col V) as
+#               soon as they are consumed (100% export unit view)   [A-F3-3]
+fg_stock_as = "pending"
+
+# Defaults pre-filled on new imports / exports (ICEGATE port codes).
+default_port_of_import = "INBOM4"
+default_port_of_export = "INBOM4"
+
+[mapping]
+# Strip punctuation when normalising supplier descriptions, so
+# "Cable, USB-C (2m)" and "CABLE USB C 2M" resolve to the same key. [A-MAP-1]
+strip_punctuation = true

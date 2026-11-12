@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+{% include "_masters_nav.html" %}
+<h1>Item {{ item.code }}</h1>
+<form method="post" class="panel">{{ csrf() }}
+  <div class="grid">
+    <div style="grid-column: span 2"><label>Description</label><input name="description" value="{{ item.description }}"></div>
+    <div><label>UOM</label><input name="uom" value="{{ item.uom }}"></div>
+    <div><label>Type</label><select name="item_type">{% for t in ('COMPONENT','ACCESSORY') %}<option {{ 'selected' if item.item_type==t }}>{{ t }}</option>{% endfor %}</select></div>
+    <div><label>HS code</label><input name="hs_code" value="{{ item.hs_code or '' }}"></div>
+    <div><label>BCD % (blank = default)</label><input name="bcd_rate" value="{{ item.bcd_rate if item.bcd_rate is not none else '' }}"></div>
+    <div><label>SWS % of BCD (blank = default)</label><input name="sws_rate" value="{{ item.sws_rate if item.sws_rate is not none else '' }}"></div>
+    <div><label>Active</label><input type="checkbox" name="active" {{ 'checked' if item.active }}></div>
+  </div>
+  {% if can_edit %}
+  <div class="actions"><button name="action" value="save">Save</button>
+    <button class="danger" name="action" value="delete" data-confirm="Delete item {{ item.code }}?">Delete</button></div>
+  {% endif %}
+</form>
+{% endblock %}

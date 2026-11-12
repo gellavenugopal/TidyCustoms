@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block title %}{{ 'Result' if confirmed else 'Preview' }} - {{ k.title }}{% endblock %}
+{% block body %}
+{% set unit = {'imports': 'invoice', 'exports': 'shipment', 'boms': 'BOM version'}[kind] %}
+<h1>{{ 'Upload result' if confirmed else 'Preview' }} - {{ k.title }}</h1>
+{% set ok = outcomes|selectattr('status', 'in', ['created', 'posted'])|list %}
+{% set bad = outcomes|selectattr('status', 'equalto', 'error')|list %}
+{% set skip = outcomes|selectattr('status', 'equalto', 'skipped')|list %}
+<p class="sub">{% if filename %}{{ filename }} · {% endif %}{{ outcomes|length }} {{ unit }}(s):
+  {{ ok|length }} {{ 'will be created' if not confirmed else 'created' }}, {{ skip|length }} already in the tracker, {{ bad|length }} with errors.</p>
+
+{% if bad %}<div class="note">Rows with errors are not {{ 'created' if confirmed else 'going to be created' }}. Fix them in the Excel file and upload it again - what's already in the tracker is skipped.</div>{% endif %}
+
+<div class="table-wrap"><table>
+  <thead><tr><th>{{ 'Model / effective date' if kind == 'boms' else k.doc ~ ' / invoice' }}</th><th>Excel rows</th><th>Result</th><th>Details</th>
+    <th>{{ 'New parts / models' if kind == 'boms' else 'New parts / suppliers' }}</th>
+    <th class="n">{{ {'imports': 'Duty forgone', 'exports': 'Bond recredit', 'boms': 'Components'}[kind] }}</th></tr></thead>
+  <tbody>{% for o in outcomes %}
+    <tr><td>{{ o.key }}</td><td>{{ o.rows|join(', ') if o.rows|length < 9 else (o.rows[:8]|join(', ') ~ '…') }}</td>
+      <td><span class="tag {{ {'created':'POSTED','posted':'POSTED','skipped':'DRAFT','error':'CANCELLED'}[o.status] }}">{{ {'created':('new version' if kind == 'boms' else 'draft'),'posted':'posted','skipped':'skipped','error':'error'}[o.status] }}</span></td>
+      <td>{{ o.message }}{% if confirmed and o.doc_id and o.status != 'error' %}
+        · <a href="{{ url_for('main.import_view', invoice_id=o.doc_id) if kind == 'imports' else (url_for('main.bom_view', bom_id=o.doc_id) if kind == 'boms' else url_for('main.export_view', shipment_id=o.doc_id)) }}">open</a>{% endif %}</td>
+      <td>{{ (o.new_parts + o.new_suppliers)|join(', ') }}</td>
+      <td class="n">{% if o.status in ('created', 'posted') %}{{ o.lines if kind == 'boms' else o.value|money }}{% endif %}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+
+{% if not confirmed %}
+  {% if ok %}
+  <form method="post" action="{{ url_for('main.doc_template_confirm', kind=kind) }}" class="actions">{{ csrf() }}
+    <input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="post" value="{{ '1' if post else '0' }}">
+    <button>Confirm - create {{ ok|length }} {{ unit }}(s){{ ' and post them' if post and kind == 'imports' }}</button>
+    <a href="{{ url_for('main.doc_upload', kind=kind) }}">Cancel</a>
+  </form>
+  {% else %}<div class="actions"><a class="btn secondary" href="{{ url_for('main.doc_upload', kind=kind) }}">Back to upload</a></div>{% endif %}
+{% else %}
+  <div class="actions"><a class="btn" href="{{ url_for(k.back) }}">Go to {{ {'imports': 'imports', 'exports': 'exports', 'boms': 'models & BOMs'}[kind] }}</a>
+    <a class="btn secondary" href="{{ url_for('main.doc_upload', kind=kind) }}">Upload more</a></div>
+{% endif %}
+{% endblock %}

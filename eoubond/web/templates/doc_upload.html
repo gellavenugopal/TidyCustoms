@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block title %}Upload {{ k.title }} - EOU Bond Tracker{% endblock %}
+{% block body %}
+<h1>Upload {{ k.title }}</h1>
+{% if kind == 'boms' %}
+<p class="sub">Three steps: download the BOM template (current BOMs already in it) → edit or add BOMs in Excel → upload. One file can hold BOMs for every finished good.</p>
+{% else %}
+<p class="sub">Three steps: PDFs → Excel template (pre-filled) → fill the gaps and tag {{ 'Part Nos' if kind == 'imports' else 'models / Part Nos' }} → upload the template.</p>
+{% endif %}
+
+<div class="cards">
+  {% if kind == 'boms' %}
+  <div class="card">
+    <h2 style="margin-top:0">1. Download the BOM template</h2>
+    <p class="muted">Every model's current BOM is filled in, one row per component (model, effective date, Part No, qty per unit).</p>
+    <a class="btn" href="{{ url_for('main.doc_blank', kind=kind) }}">Download BOM template</a>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0">2. Edit in Excel</h2>
+    <p class="muted"><b>Change a BOM:</b> edit its rows and give them a <b>new Effective from</b> date - that creates the next version; older versions stay for past production.
+      <b>New model:</b> add rows with its code and name. <b>New part:</b> give it a description and UOM.</p>
+  </div>
+  {% else %}
+  <form method="post" action="{{ url_for('main.doc_from_pdf', kind=kind) }}" enctype="multipart/form-data" class="card">{{ csrf() }}
+    <h2 style="margin-top:0">1. {{ k.doc }} PDFs → Excel</h2>
+    <p class="muted">Upload one or more ICEGATE {{ k.doc }} PDFs. Every item is extracted and you get one Excel template with
+      everything filled in that the PDF contains. Missing cells are yellow.</p>
+    <p><input type="file" name="pdfs" accept=".pdf" multiple required></p>
+    <button>Extract &amp; download Excel</button>
+  </form>
+
+  <div class="card">
+    <h2 style="margin-top:0">2. Fill &amp; tag in Excel</h2>
+    <p class="muted">{% if kind == 'imports' %}Tag each row with its unique <b>Part No</b> (new codes are created as new parts).
+      Fill yellow cells (bond, receipt date …). Check sheet "Check": duty must agree with the bond debit on the BoE.
+      {% else %}Tag each row: <b>FG</b> + model code, or <b>ITEM</b> + Part No for accessories exported as-is.
+      {% endif %} Tags are remembered for the same description next time.</p>
+    <p>No PDF? <a href="{{ url_for('main.doc_blank', kind=kind) }}">{{ 'Download a template listing the stock on hand' if kind == 'exports' else 'Download a blank template' }}</a></p>
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('main.doc_template_preview', kind=kind) }}" enctype="multipart/form-data" class="card">{{ csrf() }}
+    <h2 style="margin-top:0">3. Upload the filled template</h2>
+    <p class="muted">You'll see a preview first - nothing is saved until you confirm. Uploading the same file again is safe:
+      {{ {'imports': 'invoices', 'exports': 'export invoices', 'boms': 'BOM versions'}[kind] }} already in the tracker are skipped.</p>
+    <p><input type="file" name="template" accept=".xlsx" required></p>
+    {% if kind == 'imports' %}<p><label><input type="checkbox" name="post"> Also post the imports (debit the bond) - otherwise they're saved as drafts</label></p>
+    {% elif kind == 'exports' %}<p class="muted">Exports are posted on confirm: stock is drawn FIFO and the bond is recredited.</p>{% endif %}
+    <button>Preview</button>
+  </form>
+</div>
+<div class="actions"><a href="{{ url_for(k.back) }}">Back</a></div>
+{% endblock %}

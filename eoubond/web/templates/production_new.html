@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+<h1>Record production</h1>
+<p class="sub">Check availability first; posting deducts each BOM component from the oldest duty-saved lots. Nothing is consumed if any component is short.</p>
+<form method="post">{{ csrf() }}
+  <div class="panel grid">
+    <div><label>Batch no *</label><input name="batch_no" value="{{ form.get('batch_no','') }}"></div>
+    <div><label>Production date *</label><input type="date" name="production_date" value="{{ form.get('production_date', today.isoformat()) }}"></div>
+    <div><label>Model *</label><select name="model_id" required><option value="">- choose -</option>
+      {% for m in models %}<option value="{{ m.id }}" {{ 'selected' if form.get('model_id')|int == m.id }}>{{ m.code }} - {{ m.name }}</option>{% endfor %}</select></div>
+    <div><label>Quantity *</label><input name="qty" inputmode="decimal" value="{{ form.get('qty','') }}"></div>
+    <div><label>BOM version</label><select name="bom_id"><option value="">Effective on production date</option>
+      {% for b in boms %}<option value="{{ b.id }}" {{ 'selected' if form.get('bom_id')|int == b.id }}>{{ b.model.code }} v{{ b.version }} (from {{ b.effective_from|dt }})</option>{% endfor %}</select></div>
+    <div><label>Consume from bond{% if rules.production_scope == 'bond' %} *{% endif %}</label><select name="bond_id"><option value="">Any bond (FIFO across all)</option>
+      {% for b in bonds %}<option value="{{ b.id }}" {{ 'selected' if form.get('bond_id')|int == b.id }}>{{ b.bond_no }}</option>{% endfor %}</select></div>
+    <div style="grid-column: span 2"><label>Remarks</label><input name="remarks" value="{{ form.get('remarks','') }}"></div>
+  </div>
+  {% if preview %}
+  <h2>Component availability - BOM v{{ bom.version }}</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Code</th><th>Description</th><th class="n">Required</th><th class="n">Available (duty-saved)</th><th class="n">Short</th></tr></thead>
+    <tbody>{% for r in preview %}
+      <tr><td>{{ r.item.code }}</td><td>{{ r.item.description }}</td><td class="n">{{ r.required|qty }}</td><td class="n">{{ r.available|qty }}</td>
+        <td class="n">{% if r.shortfall > 0 %}<span class="tag CLOSED">{{ r.shortfall|qty }}</span>{% else %}-{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+  <div class="actions">
+    <button class="secondary" name="action" value="preview">Check availability</button>
+    <button name="action" value="post" data-confirm="Post production and consume components?">Post production</button>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>BOM {{ bom.model.code }} v{{ bom.version }}</h1>
+<p class="sub">Effective from {{ bom.effective_from|dt }} · {{ bom.remarks or 'no remarks' }} · created by {{ bom.created_by }}</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Code</th><th>Description</th><th>Type</th><th class="n">Qty per unit</th><th>UOM</th></tr></thead>
+  <tbody>{% for l in bom.lines %}<tr><td>{{ l.item.code }}</td><td>{{ l.item.description }}</td><td>{{ l.item.item_type }}</td><td class="n">{{ l.qty_per_unit|qty }}</td><td>{{ l.item.uom }}</td></tr>{% endfor %}</tbody>
+</table></div>
+<div class="actions"><a href="{{ url_for('main.models') }}">Back to models</a></div>
+{% endblock %}

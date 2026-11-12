@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+{% include "_masters_nav.html" %}
+<h1>Suppliers</h1>
+{% if can_edit %}
+<form method="post" class="panel">{{ csrf() }}
+  <div class="grid"><div><label>Name *</label><input name="name" required></div><div><label>Country</label><input name="country"></div></div>
+  <div class="actions"><button>Add supplier</button></div>
+</form>
+{% endif %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Name</th><th>Country</th><th></th></tr></thead>
+  <tbody>{% for s in suppliers %}
+  <tr><td>{{ s.name }}</td><td>{{ s.country or '' }}</td>
+      <td>{% if can_edit %}<form method="post">{{ csrf() }}<input type="hidden" name="supplier_id" value="{{ s.id }}">
+        <button class="danger" name="action" value="delete" data-confirm="Delete supplier {{ s.name }}?">Delete</button></form>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="3" class="muted">No suppliers.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

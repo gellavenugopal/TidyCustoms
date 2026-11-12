@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "_macros.html" import report_table %}
+{% block title %}{{ title }} - EOU Bond Tracker{% endblock %}
+{% block body %}
+<h1>{{ title }}</h1>
+<form method="get" class="actions">
+  {% if filters.bond %}
+  {% set chosen = (request.args.get('bond_id') or selected_bond_id or 0)|int %}
+  <select name="bond_id" style="max-width:220px"><option value="">All bonds</option>
+    {% for b in all_bonds %}<option value="{{ b.id }}" {{ 'selected' if chosen == b.id }}>{{ b.bond_no }}</option>{% endfor %}</select>
+  {% endif %}
+  {% if filters.dates %}
+  <input type="date" name="from" value="{{ request.args.get('from','') }}" style="max-width:160px" title="From">
+  <input type="date" name="to" value="{{ request.args.get('to','') }}" style="max-width:160px" title="To">
+  {% endif %}
+  {% if tables %}
+  <select name="table" style="max-width:220px"><option value="">All tables</option>{% for t in tables %}<option {{ 'selected' if request.args.get('table') == t }}>{{ t }}</option>{% endfor %}</select>
+  {% endif %}
+  {% if filters.bond or filters.dates or tables %}<button class="secondary">Apply</button>{% endif %}
+  <a class="btn" href="{{ url_for('main.report', name=name, format='xlsx', **request.args.to_dict()) }}">Export to Excel</a>
+</form>
+{% for rep in results %}
+  {% if results|length > 1 %}<h2>{{ rep.title }}</h2>{% endif %}
+  {% if rep.subtitle %}<p class="muted">{{ rep.subtitle }}</p>{% endif %}
+  {{ report_table(rep) }}
+{% endfor %}
+{% endblock %}

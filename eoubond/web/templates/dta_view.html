@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf, report_table %}
+{% block body %}
+<h1>DTA clearance {{ clr.clearance_no }} <span class="tag {{ clr.status }}">{{ clr.status }}</span></h1>
+<p class="sub">{{ clr.clearance_date|dt }} · {{ clr.customer or 'no customer' }}{% if clr.be_no %} · BE {{ clr.be_no }}{% endif %}
+  {% if clr.status == 'PAID' %} · paid {{ clr.paid_date|dt }}, challan {{ clr.challan_no }}{% endif %}
+  · bond recredit {{ 'done' if clr.bond_recredited else ('on payment' if rules.dta_recredit_on == 'payment' else 'not applicable') }} (₹ {{ clr.total_dsv|money }})</p>
+
+<div class="cards">
+  <div class="card"><div class="k">Assessable value</div><div class="v">₹ {{ clr.total_av|money }}</div></div>
+  <div class="card"><div class="k">BCD</div><div class="v">₹ {{ clr.total_bcd|money }}</div></div>
+  <div class="card"><div class="k">SWS</div><div class="v">₹ {{ clr.total_sws|money }}</div></div>
+  <div class="card"><div class="k">Duty payable</div><div class="v">₹ {{ clr.total_duty|money }}</div><div class="muted">GST excluded</div></div>
+</div>
+
+<h2>Payment computation - duty per line</h2>
+{{ report_table(summary) }}
+<h2>Input-wise working</h2>
+{{ report_table(detail) }}
+
+<div class="actions"><a class="btn secondary" href="{{ url_for('main.dta_view', clearance_id=clr.id, format='xlsx') }}">Export computation to Excel</a></div>
+
+{% if clr.status == 'PENDING' and can_edit %}
+<form method="post" class="panel">{{ csrf() }}
+  <h2 style="margin-top:0">Record duty payment</h2>
+  <div class="grid"><div><label>Challan / TR-6 / e-payment ref *</label><input name="challan_no" required></div>
+    <div><label>Paid on</label><input type="date" name="paid_date" value="{{ today.isoformat() }}"></div></div>
+  <div class="actions"><button data-confirm="Mark ₹ {{ clr.total_duty|money }} as paid{{ ' and recredit the bond' if rules.dta_recredit_on == 'payment' }}?">Mark paid</button></div>
+</form>
+{% endif %}
+<div class="actions"><a href="{{ url_for('main.dta') }}">Back to DTA clearances</a></div>
+{% endblock %}

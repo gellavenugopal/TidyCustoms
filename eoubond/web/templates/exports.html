@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Exports</h1>
+<p class="sub">Shipments of finished detectors and accessories. Each recredits the bond(s) by the duty-saved value of the imported inputs that left.</p>
+{% if can_edit %}<div class="actions"><a class="btn" href="{{ url_for('main.doc_upload', kind='exports') }}">Upload SB PDFs / Excel</a>
+  <a class="btn secondary" href="{{ url_for('main.doc_blank', kind='exports') }}">Excel template with stock on hand</a>
+  <a class="btn secondary" href="{{ url_for('main.export_new') }}">Enter on screen</a></div>{% endif %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Date</th><th>Invoice</th><th>Shipping bill</th><th>Consignee</th><th>Items</th><th class="n">Bond recredit</th></tr></thead>
+  <tbody>{% for s in shipments %}
+  <tr><td>{{ s.export_date|dt }}</td><td><a href="{{ url_for('main.export_view', shipment_id=s.id) }}">{{ s.invoice_no }}</a></td>
+      <td>{{ s.shipping_bill_no or '' }}</td><td>{{ s.consignee or '' }}{% if s.country %} ({{ s.country }}){% endif %}</td>
+      <td>{% for l in s.lines %}{{ l.qty|qty }} × {{ l.export_item_name }}{{ '; ' if not loop.last }}{% endfor %}</td>
+      <td class="n">{{ s.total_recredit|money }}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">No exports.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

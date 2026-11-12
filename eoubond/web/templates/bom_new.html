@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+<h1>New BOM version - {{ model.code }}</h1>
+<p class="sub">{% if latest %}Pre-filled from v{{ latest.version }} (effective {{ latest.effective_from|dt }}). Change what differs.{% else %}First BOM for this model.{% endif %}</p>
+<form method="post">{{ csrf() }}
+  <div class="panel grid">
+    <div><label>Effective from *</label><input type="date" name="effective_from" required value="{{ today.isoformat() }}"></div>
+    <div style="grid-column: span 2"><label>Remarks</label><input name="remarks" placeholder="e.g. ECN-0142 new readout board"></div>
+  </div>
+  <table class="lines table-wrap" id="bomlines">
+    <thead><tr><th>Component code</th><th class="n">Qty per unit</th><th></th></tr></thead>
+    <tbody>
+    {% set rows = latest.lines if latest else [none] %}
+    {% for ln in rows %}
+      <tr><td><select name="item_id"><option value="">- choose -</option>
+          {% for i in items %}<option value="{{ i.id }}" {{ 'selected' if ln and ln.item_id == i.id }}>{{ i.code }} - {{ i.description }}</option>{% endfor %}</select></td>
+        <td><input name="qty" inputmode="decimal" value="{{ ln.qty_per_unit|qty if ln else '' }}"></td>
+        <td><button class="secondary" data-del-row>Remove</button></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="actions"><button class="secondary" data-add-row="bomlines">Add component</button><button>Create version</button></div>
+</form>
+{% endblock %}

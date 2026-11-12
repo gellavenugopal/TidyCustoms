@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+{% include "_masters_nav.html" %}
+<h1>Description mappings</h1>
+<p class="sub">Supplier descriptions are normalised (upper case, punctuation and extra spaces removed) and resolved to one internal code. A supplier-specific mapping wins over a global one.</p>
+{% if can_edit %}
+<form method="post" class="panel">{{ csrf() }}
+  <div class="grid">
+    <div style="grid-column: span 2"><label>Supplier description *</label><input name="description" required></div>
+    <div><label>Item code *</label><select name="item_id" required><option value="">- choose -</option>{% for i in items %}<option value="{{ i.id }}">{{ i.code }} - {{ i.description }}</option>{% endfor %}</select></div>
+    <div><label>Scope</label><select name="supplier_id"><option value="">Global (all suppliers)</option>{% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
+  </div>
+  <div class="actions"><button>Save mapping</button></div>
+</form>
+{% endif %}
+<form class="actions" method="get"><input name="q" value="{{ q }}" placeholder="Search description" style="max-width:320px"><button class="secondary">Search</button></form>
+<div class="table-wrap"><table>
+  <thead><tr><th>Normalised description</th><th>Example as received</th><th>Scope</th><th>Item code</th><th>By</th><th></th></tr></thead>
+  <tbody>{% for m in mappings %}
+  <tr><td class="mono">{{ m.normalized_description }}</td><td>{{ m.sample_description }}</td>
+      <td>{{ m.supplier.name if m.supplier else 'Global' }}</td><td>{{ m.item.code }}</td><td class="muted">{{ m.created_by }}</td>
+      <td>{% if can_edit %}<form method="post">{{ csrf() }}<input type="hidden" name="mapping_id" value="{{ m.id }}"><button class="danger" name="action" value="delete" data-confirm="Remove this mapping?">Remove</button></form>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">No mappings.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

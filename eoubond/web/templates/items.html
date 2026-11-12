@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+{% include "_masters_nav.html" %}
+<h1>Items</h1>
+<p class="sub">Every component, raw material and accessory has one unique internal code. BOMs, mappings and stock use this code.</p>
+{% if can_edit %}
+<form method="post" class="panel">{{ csrf() }}
+  <div class="grid">
+    <div><label>Code *</label><input name="code" required placeholder="e.g. TFT-4343"></div>
+    <div style="grid-column: span 2"><label>Description *</label><input name="description" required></div>
+    <div><label>UOM</label><input name="uom" value="NOS"></div>
+    <div><label>Type</label><select name="item_type"><option>COMPONENT</option><option>ACCESSORY</option></select></div>
+    <div><label>HS code</label><input name="hs_code"></div>
+    <div><label>BCD % (blank = default {{ rules.default_bcd_rate }})</label><input name="bcd_rate" inputmode="decimal"></div>
+    <div><label>SWS % of BCD (blank = {{ rules.sws_rate_on_bcd }})</label><input name="sws_rate" inputmode="decimal"></div>
+  </div>
+  <div class="actions"><button>Add item</button></div>
+</form>
+{% endif %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Code</th><th>Description</th><th>UOM</th><th>Type</th><th>HS</th><th class="n">BCD %</th><th class="n">SWS %</th><th>Active</th></tr></thead>
+  <tbody>{% for i in items %}
+  <tr><td><a href="{{ url_for('main.item_edit', item_id=i.id) }}">{{ i.code }}</a></td><td>{{ i.description }}</td><td>{{ i.uom }}</td>
+      <td>{{ i.item_type }}</td><td>{{ i.hs_code or '' }}</td>
+      <td class="n">{{ i.bcd_rate if i.bcd_rate is not none else '(default)' }}</td>
+      <td class="n">{{ i.sws_rate if i.sws_rate is not none else '(default)' }}</td><td>{{ 'Yes' if i.active else 'No' }}</td></tr>
+  {% else %}<tr><td colspan="8" class="muted">No items.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf, target_select %}
+{% block body %}
+<h1>New DTA clearance</h1>
+<p class="sub">Stock is drawn FIFO exactly as for exports. Duty is computed on the assessable value of the duty-saved imported inputs: BCD at the item rate (default {{ rules.default_bcd_rate }}%), SWS at {{ rules.sws_rate_on_bcd }}% of BCD{{ ', each rounded to the rupee per line' if rules.round_duty_to_rupee }}. GST is not included.</p>
+<form method="post">{{ csrf() }}
+  <div class="panel grid">
+    <div><label>Clearance no *</label><input name="clearance_no" required value="{{ form.get('clearance_no','') }}"></div>
+    <div><label>Clearance date *</label><input type="date" name="clearance_date" value="{{ form.get('clearance_date', today.isoformat()) }}"></div>
+    <div><label>Customer</label><input name="customer" value="{{ form.get('customer','') }}"></div>
+    <div><label>Bill of Entry (DTA) no</label><input name="be_no" value="{{ form.get('be_no','') }}"></div>
+  </div>
+  <div class="table-wrap"><table class="lines" id="dtalines">
+    <thead><tr><th>Goods</th><th>Description</th><th class="n">Qty *</th><th class="n">Sale value ₹ (info)</th><th></th></tr></thead>
+    <tbody>
+    {% set targets = form.getlist('target') if form else [] %}
+    {% for i in range([targets|length, 1]|max) %}
+      <tr><td>{{ target_select(fg, items, targets[i] if targets else '') }}</td>
+        <td><input name="description" value="{{ form.getlist('description')[i] if targets else '' }}"></td>
+        <td><input name="qty" inputmode="decimal" value="{{ form.getlist('qty')[i] if targets else '' }}"></td>
+        <td><input name="sale_value" inputmode="decimal" value="{{ form.getlist('sale_value')[i] if targets else '' }}"></td>
+        <td><button class="secondary" data-del-row>Remove</button></td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <div class="actions"><button class="secondary" data-add-row="dtalines">Add line</button>
+    <button data-confirm="Record this DTA clearance and draw the stock?">Record clearance</button></div>
+</form>
+{% endblock %}

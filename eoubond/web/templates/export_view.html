@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Export {{ sh.invoice_no }}</h1>
+<p class="sub">{{ sh.export_date|dt }}{% if sh.shipping_bill_no %} · SB {{ sh.shipping_bill_no }} {{ sh.shipping_bill_date|dt }}{% endif %}
+  {% if sh.consignee %} · {{ sh.consignee }}{% endif %}{% if sh.country %} ({{ sh.country }}){% endif %} · total bond recredit <b>₹ {{ sh.total_recredit|money }}</b></p>
+{% for l in sh.lines %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ l.line_no }}. {{ l.export_item_name }} <span class="muted">- {{ l.qty|qty }} × {{ l.model.code if l.model else l.item.code }} ({{ 'finished detector' if l.line_type=='FG' else 'accessory / item' }})</span></h2>
+  <p class="muted">FOB ₹ {{ l.fob_value|money }} · recredit ₹ {{ l.dsv_recredited|money }}</p>
+  <table>
+    <thead><tr><th>Input</th><th>Import invoice / line</th><th>Bond</th><th>Via FG batch</th><th class="n">Input qty</th><th class="n">AV</th><th class="n">Duty saved recredited</th></tr></thead>
+    <tbody>{% for a in trace[l.id] %}
+      <tr><td>{{ a.item.code }}</td><td>{{ a.import_lot.source_ref }}</td><td>{{ a.bond_label }}</td>
+        <td>{{ ('lot %d, %s units'|format(a.fg_lot_id, a.fg_qty|qty)) if a.fg_lot_id else '-' }}</td>
+        <td class="n">{{ a.qty|qty }}</td><td class="n">{{ a.av|money }}</td><td class="n">{{ a.dsv|money }}</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endfor %}
+<div class="actions"><a href="{{ url_for('main.exports') }}">Back to exports</a></div>
+{% endblock %}

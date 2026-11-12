@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+<h1>Users</h1>
+<p class="sub">admin: everything incl. users · operator: data entry and posting · viewer: read-only and Excel export.</p>
+<form method="post" class="panel">{{ csrf() }}<input type="hidden" name="action" value="create">
+  <div class="grid">
+    <div><label>Username *</label><input name="username" required></div>
+    <div><label>Full name</label><input name="full_name"></div>
+    <div><label>Password * (min 8)</label><input name="password" type="password" required minlength="8"></div>
+    <div><label>Role</label><select name="role"><option>viewer</option><option>operator</option><option>admin</option></select></div>
+  </div>
+  <div class="actions"><button>Add user</button></div>
+</form>
+<div class="table-wrap"><table>
+  <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Active</th><th>Actions</th></tr></thead>
+  <tbody>{% for u in users %}
+  <tr><td>{{ u.username }}</td><td>{{ u.full_name or '' }}</td><td>{{ u.role }}</td><td>{{ 'Yes' if u.active else 'No' }}</td>
+    <td>{% if u.id != current_user.id %}
+      <form method="post" style="display:inline-flex;gap:6px">{{ csrf() }}<input type="hidden" name="user_id" value="{{ u.id }}">
+        <select name="role" style="width:auto">{% for r in ('viewer','operator','admin') %}<option {{ 'selected' if u.role==r }}>{{ r }}</option>{% endfor %}</select>
+        <button class="secondary" name="action" value="role">Set role</button>
+        <button class="secondary" name="action" value="toggle">{{ 'Disable' if u.active else 'Enable' }}</button>
+      </form>
+      <form method="post" style="display:inline-flex;gap:6px">{{ csrf() }}<input type="hidden" name="user_id" value="{{ u.id }}">
+        <input name="password" type="password" placeholder="new password" minlength="8" style="width:140px">
+        <button class="secondary" name="action" value="password">Reset</button></form>
+      {% else %}<span class="muted">you</span>{% endif %}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% endblock %}

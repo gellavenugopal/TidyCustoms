@@ -1,0 +1,31 @@
+{% macro csrf() %}<input type="hidden" name="_csrf" value="{{ csrf_value() }}">{% endmacro %}
+
+{% macro report_table(rep) %}
+<div class="table-wrap">
+<table>
+  <thead><tr>{% for c in rep.columns %}<th class="{{ 'n' if c.kind in ('money','qty','rate') }}">{{ c.label }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for r in rep.rows %}
+    <tr>{% for c in rep.columns %}<td class="{{ 'n' if c.kind in ('money','qty','rate') }}{{ ' mono' if c.key in ('old','new') }}">{{ r[c.key] | cell(c.kind) }}</td>{% endfor %}</tr>
+  {% else %}
+    <tr><td colspan="{{ rep.columns|length }}" class="muted">No rows.</td></tr>
+  {% endfor %}
+  {% if rep.totals and rep.rows %}
+    <tr class="total">{% for c in rep.columns %}<td class="{{ 'n' if c.kind in ('money','qty','rate') }}">{% if loop.first %}Total{% elif c.key in rep.totals %}{{ rep.totals[c.key] | cell(c.kind) }}{% endif %}</td>{% endfor %}</tr>
+  {% endif %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+
+{% macro target_select(fg, items, selected='') %}
+<select name="target">
+  <option value="">- choose -</option>
+  <optgroup label="Finished detectors (FG stock)">
+    {% for m, avail in fg %}<option value="FG:{{ m.id }}" {{ 'selected' if selected == 'FG:%d'|format(m.id) }}>{{ m.code }} - {{ m.name }} (in stock {{ avail|qty }})</option>{% endfor %}
+  </optgroup>
+  <optgroup label="Accessories / other duty-saved goods">
+    {% for i, avail in items %}<option value="ITEM:{{ i.id }}" {{ 'selected' if selected == 'ITEM:%d'|format(i.id) }}>{{ i.code }} - {{ i.description }} (in stock {{ avail|qty }} {{ i.uom }})</option>{% endfor %}
+  </optgroup>
+</select>
+{% endmacro %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Form III quarterly return - EOU Bond Tracker{% endblock %}
+{% block body %}
+<h1>Form III quarterly return</h1>
+<p class="sub">Same six sheets and columns as the filed return. Quantities are cumulative from import to the quarter end; a Bill of Entry item is listed if it was imported in the quarter or still had stock at its start.</p>
+<form method="get" class="actions">
+  <select name="quarter_end" style="max-width:520px" onchange="this.form.submit()">
+    {% for e in ends %}<option value="{{ e.isoformat() }}" {{ 'selected' if e == chosen }}>{{ f3.quarter_label(e) }}</option>{% endfor %}
+  </select>
+  <a class="btn" href="{{ url_for('main.form3_return', quarter_end=chosen.isoformat(), format='xls') }}">Download .xls for filing</a>
+  <a class="btn secondary" href="{{ url_for('main.form3_return', quarter_end=chosen.isoformat(), format='working') }}">Working file with formulas (.xlsx)</a>
+</form>
+<p class="muted">Rules: SWS reported {{ 'inside BCD Forgone' if rules.form3_sws_in_bcd_column else 'under Other Custom Duties' }} ·
+  accessories exported as-is counted as {{ 'used for exported goods (V)' if rules.form3_item_export_as == 'export' else 're-exported (T)' }} ·
+  inputs in unsold finished goods counted as {{ 'pending in stock (Z)' if rules.form3_fg_stock_as == 'pending' else 'used for exported goods (V)' }}.
+  Change these in config/rules.toml [form3].</p>
+
+{% if form.warnings %}
+<div class="note"><b>Check before filing ({{ form.warnings|length }}):</b>
+  <ul style="margin:4px 0 0 18px; padding:0">{% for w in form.warnings[:30] %}<li>{{ w }}</li>{% endfor %}
+  {% if form.warnings|length > 30 %}<li>… and {{ form.warnings|length - 30 }} more</li>{% endif %}</ul></div>
+{% endif %}
+
+{% for name in f3.SHEETS %}
+  {% set rows = form.sheets[name] %}
+  <h2>{{ name }} <span class="muted">({{ rows|length }} row{{ '' if rows|length == 1 else 's' }})</span></h2>
+  {% if rows %}
+  <div class="table-wrap" style="max-height:520px; overflow:auto">
+  <table>
+    <thead><tr>{% for h in f3.HEADERS[name] %}<th style="white-space:normal; min-width:90px">{{ h }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r in rows %}<tr>{% for v in r %}
+      <td class="{{ 'n' if v is number }}">{% if v is number %}{{ '{:,.2f}'.format(v) if v is float else v }}{% elif v.strftime is defined %}{{ v.strftime('%d-%b-%y') }}{% else %}{{ v }}{% endif %}</td>
+    {% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">No entries this quarter.</p>{% endif %}
+{% endfor %}
+{% endblock %}

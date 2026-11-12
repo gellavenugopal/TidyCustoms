@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Imports</h1>
+<p class="sub">Raw-material receipts - under bond (duty forgone, debited to the bond) or duty paid (no bond){% if selected_bond_id %} · filtered to the working bond{% endif %}.</p>
+{% if can_edit %}<div class="actions"><a class="btn" href="{{ url_for('main.doc_upload', kind='imports') }}">Upload BoE PDFs / Excel</a>
+  <a class="btn secondary" href="{{ url_for('main.import_new') }}">Enter manually</a></div>{% endif %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Date</th><th>Invoice</th><th>Supplier</th><th>Bond</th><th>BE no</th><th>Status</th><th class="n">Lines</th><th class="n">Duty forgone (bond debit)</th><th class="n">Duty paid</th></tr></thead>
+  <tbody>{% for inv in invoices %}
+  <tr><td>{{ inv.invoice_date|dt }}</td><td><a href="{{ url_for('main.import_view', invoice_id=inv.id) }}">{{ inv.invoice_no }}</a></td>
+      <td>{{ inv.supplier.name }}</td><td>{{ inv.bond_label }}</td><td>{{ inv.be_no or '' }}</td>
+      <td><span class="tag {{ inv.status }}">{{ inv.status }}</span></td><td class="n">{{ inv.lines|length }}</td>
+      <td class="n">{{ '' if inv.duty_paid else inv.total_dsv|money }}</td><td class="n">{{ inv.total_duty|money if inv.duty_paid else '' }}</td></tr>
+  {% else %}<tr><td colspan="9" class="muted">No imports.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

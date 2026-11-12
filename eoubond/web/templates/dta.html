@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>DTA clearances</h1>
+<p class="sub">Domestic clearances of duty-saved goods. Duty payable is BCD + SWS only; GST is charged on the domestic supply invoice in the normal way.</p>
+{% if can_edit %}<div class="actions"><a class="btn" href="{{ url_for('main.dta_new') }}">New DTA clearance</a></div>{% endif %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Date</th><th>Clearance</th><th>Customer</th><th>Status</th><th class="n">Assessable value</th><th class="n">BCD</th><th class="n">SWS</th><th class="n">Duty</th><th>Challan</th></tr></thead>
+  <tbody>{% for c in clearances %}
+  <tr><td>{{ c.clearance_date|dt }}</td><td><a href="{{ url_for('main.dta_view', clearance_id=c.id) }}">{{ c.clearance_no }}</a></td><td>{{ c.customer or '' }}</td>
+      <td><span class="tag {{ c.status }}">{{ c.status }}</span></td><td class="n">{{ c.total_av|money }}</td><td class="n">{{ c.total_bcd|money }}</td>
+      <td class="n">{{ c.total_sws|money }}</td><td class="n"><b>{{ c.total_duty|money }}</b></td><td>{{ c.challan_no or '' }}</td></tr>
+  {% else %}<tr><td colspan="9" class="muted">No DTA clearances.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

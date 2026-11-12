@@ -1,0 +1,3 @@
+-r requirements.txt
+# Recalculates the formula workbooks in tests (tests/test_explained.py)
+formulas==1.2.8

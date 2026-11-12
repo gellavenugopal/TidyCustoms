@@ -1,0 +1,31 @@
+# Local production-like stack: app + PostgreSQL.
+#   docker compose up --build
+#   docker compose exec app python -m eoubond.cli create-user admin --role admin
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: eoubond
+      POSTGRES_USER: eoubond
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eoubond-local}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eoubond"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://eoubond:${POSTGRES_PASSWORD:-eoubond-local}@db:5432/eoubond
+      SECRET_KEY: ${SECRET_KEY:-local-only-secret-change-me}
+      SESSION_COOKIE_SECURE: "0"
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

@@ -1,0 +1,55 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+<h1>New import</h1>
+<p class="sub">Enter the supplier's descriptions as they appear on the Bill of Entry. Known descriptions map to an item code automatically; pick a code only to override or for a new description. The import is saved as a draft - post it from the next screen to debit the bond.</p>
+<form method="post">{{ csrf() }}
+  <div class="panel grid">
+    <div><label>Invoice no *</label><input name="invoice_no" required value="{{ form.get('invoice_no','') }}"></div>
+    <div><label>Invoice date *</label><input type="date" name="invoice_date" required value="{{ form.get('invoice_date', today.isoformat()) }}"></div>
+    <div><label>Supplier *</label><select name="supplier_id" required><option value="">- choose -</option>
+      {% for s in suppliers %}<option value="{{ s.id }}" {{ 'selected' if form.get('supplier_id')|int == s.id }}>{{ s.name }}</option>{% endfor %}</select></div>
+    <div><label>Import type *</label><select name="import_type">
+      <option value="BOND" {{ 'selected' if form.get('import_type', 'BOND') == 'BOND' }}>Under bond (duty forgone - debit bond)</option>
+      <option value="DUTY_PAID" {{ 'selected' if form.get('import_type') == 'DUTY_PAID' }}>Duty paid (no bond)</option></select></div>
+    <div><label>Bond (imports under bond)</label><select name="bond_id"><option value="">- choose -</option>
+      {% set chosen = (form.get('bond_id') or selected_bond_id or 0)|int %}
+      {% for b in bonds %}<option value="{{ b.id }}" {{ 'selected' if chosen == b.id }}>{{ b.bond_no }} (bal {{ b.balance|money }})</option>{% endfor %}</select></div>
+    <div><label>Invoice currency</label><input name="currency" value="{{ form.get('currency','USD') }}"></div>
+  </div>
+  <div class="panel">
+    <h2 style="margin-top:0">Bill of Entry (for Form III)</h2>
+    <div class="grid">
+      <div><label>BE number</label><input name="be_no" inputmode="numeric" value="{{ form.get('be_no','') }}"></div>
+      <div><label>BE date</label><input type="date" name="be_date" value="{{ form.get('be_date','') }}"></div>
+      <div><label>Port of import</label><input name="port_of_import" value="{{ form.get('port_of_import', rules.form3_default_port_of_import) }}" placeholder="INBOM4"></div>
+      <div><label>Invoice serial no on BE</label><input name="be_invoice_serial" inputmode="numeric" value="{{ form.get('be_invoice_serial','1') }}"></div>
+      <div><label>Date of clearance (OOC)</label><input type="date" name="clearance_date" value="{{ form.get('clearance_date','') }}"></div>
+      <div><label>Date of receipt at premises</label><input type="date" name="receipt_date" value="{{ form.get('receipt_date','') }}"></div>
+    </div>
+  </div>
+  <div class="table-wrap">
+  <table class="lines" id="implines">
+    <thead><tr><th>Supplier description *</th><th>Item code</th><th class="n">BE item #</th><th class="n">Qty *</th><th class="n">Qty received</th>
+      <th class="n">Assessable value ₹ *</th><th class="n">BCD ₹</th><th class="n">SWS ₹</th><th class="n">IGST ₹</th><th class="n">Cess ₹</th><th class="n">Other ₹</th><th class="n">Total duty forgone ₹</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td><input name="description" style="min-width:240px" value="{{ r.description }}"></td>
+        <td><select name="item_id"><option value="">auto-map</option>{% for it in items %}<option value="{{ it.id }}" {{ 'selected' if r.item_id|int == it.id }}>{{ it.code }}</option>{% endfor %}</select></td>
+        <td><input name="be_item_serial" inputmode="numeric" style="min-width:60px" placeholder="auto" value="{{ r.be_item_serial }}"></td>
+        <td><input name="qty" inputmode="decimal" value="{{ r.qty }}"></td>
+        <td><input name="qty_received" inputmode="decimal" placeholder="all" value="{{ r.qty_received }}"></td>
+        <td><input name="av" inputmode="decimal" value="{{ r.av }}"></td>
+        <td><input name="bcd" inputmode="decimal" value="{{ r.bcd }}"></td>
+        <td><input name="sws" inputmode="decimal" value="{{ r.sws }}"></td>
+        <td><input name="igst" inputmode="decimal" value="{{ r.igst }}"></td>
+        <td><input name="cess" inputmode="decimal" value="{{ r.cess }}"></td>
+        <td><input name="other" inputmode="decimal" value="{{ r.other }}"></td>
+        <td><input name="dsv" inputmode="decimal" placeholder="= sum" value="{{ r.dsv }}"></td>
+        <td><button class="secondary" data-del-row>Remove</button></td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="muted">Enter the duty forgone per head as on the Bill of Entry; the total is their sum and is debited to the bond. If only the total is known, leave the heads blank (Form III will flag the line). Assessable value is used for DTA duty. Qty received defaults to the full quantity; only received goods become usable stock.</p>
+  <div class="actions"><button class="secondary" data-add-row="implines">Add line</button><button>Save draft</button></div>
+</form>
+{% endblock %}

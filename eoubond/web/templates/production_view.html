@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Batch {{ b.batch_no }}</h1>
+<p class="sub">{{ b.qty|qty }} × {{ b.model.code }} on {{ b.production_date|dt }} · BOM v{{ b.bom.version }} · {{ b.fg_lot.qty_available|qty }} still in FG stock · by {{ b.created_by }}</p>
+<h2>FIFO consumption per lot</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Component</th><th>Import invoice / line</th><th>Lot date</th><th>Bond</th><th class="n">Qty consumed</th><th class="n">AV</th><th class="n">Duty saved</th><th class="n">Still in FG stock</th></tr></thead>
+  <tbody>{% for a in b.allocations %}
+    <tr><td>{{ a.item.code }}</td><td>{{ a.import_lot.source_ref }}</td><td>{{ a.import_lot.lot_date|dt }}</td><td>{{ a.bond_label }}</td>
+      <td class="n">{{ a.qty|qty }}</td><td class="n">{{ a.av|money }}</td><td class="n">{{ a.dsv|money }}</td><td class="n">{{ a.dsv_remaining|money }}</td></tr>{% endfor %}
+    <tr class="total"><td colspan="5">Total</td><td class="n">{{ b.total_av|money }}</td><td class="n">{{ b.total_dsv|money }}</td><td></td></tr>
+  </tbody>
+</table></div>
+<div class="actions"><a href="{{ url_for('main.production') }}">Back to production</a></div>
+{% endblock %}

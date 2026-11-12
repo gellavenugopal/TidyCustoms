@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+.env
+instance/
+backups/
+config/rules.toml.bak
+.claude/
+secret_key
+# Local business documents and document tests containing real transaction data
+*.pdf
+*.xlsx
+*.xls
+tests/test_documents.py

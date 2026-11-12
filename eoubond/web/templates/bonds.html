@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+<h1>Bonds</h1>
+<p class="sub">Imports debit the bond by the duty-saved value; exports and paid DTA clearances credit it back. Pick a working bond in the top bar to default entries and reports to it.</p>
+{% if can_edit %}
+<form method="post" class="panel">{{ csrf() }}
+  <div class="grid">
+    <div><label>Bond number *</label><input name="bond_no" required></div>
+    <div><label>Bond amount (₹) *</label><input name="bond_amount" required inputmode="decimal"></div>
+    <div><label>Valid from *</label><input type="date" name="valid_from" required></div>
+    <div><label>Valid to *</label><input type="date" name="valid_to" required></div>
+    <div style="grid-column: span 2"><label>Remarks</label><input name="remarks"></div>
+  </div>
+  <div class="actions"><button>Create bond</button></div>
+</form>
+{% endif %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Bond no</th><th>Status</th><th>Valid from</th><th>Valid to</th><th class="n">Amount</th><th class="n">Utilised</th><th class="n">Balance</th><th></th></tr></thead>
+  <tbody>{% for b in bonds %}
+  <tr><td><b>{{ b.bond_no }}</b>{% if b.id == selected_bond_id %} <span class="tag">working</span>{% endif %}</td>
+      <td><span class="tag {{ b.status }}">{{ b.status }}</span>{% if b.valid_to < today %} <span class="tag CLOSED">expired</span>{% endif %}</td>
+      <td>{{ b.valid_from|dt }}</td><td>{{ b.valid_to|dt }}</td><td class="n">{{ b.bond_amount|money }}</td>
+      <td class="n">{{ (b.bond_amount - b.balance)|money }}</td><td class="n"><b>{{ b.balance|money }}</b></td>
+      <td><a href="{{ url_for('main.report', name='ledger', bond_id=b.id) }}">Ledger</a>
+        · <a href="{{ url_for('main.report', name='monthly', bond_id=b.id) }}">Monthly</a>
+        · <a href="{{ url_for('main.report', name='stock', bond_id=b.id) }}">Stock</a>
+        {% if can_edit %}· <a href="{{ url_for('main.bond_edit', bond_id=b.id) }}">Edit</a>{% endif %}
+        <form method="post" action="{{ url_for('main.select_bond') }}" style="display:inline">{{ csrf() }}<input type="hidden" name="bond_id" value="{{ b.id }}"> · <button class="link secondary" style="padding:0;border:0">Select</button></form></td></tr>
+  {% else %}<tr><td colspan="8" class="muted">No bonds.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

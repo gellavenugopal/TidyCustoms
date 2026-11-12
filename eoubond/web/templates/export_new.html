@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf, target_select %}
+{% block body %}
+<h1>New export</h1>
+<p class="sub">Choose a finished model (drawn FIFO from FG stock) or an accessory / other duty-saved item (drawn FIFO from import lots). Give accessories the name used on the export invoice.</p>
+<form method="post">{{ csrf() }}
+  <div class="panel grid">
+    <div><label>Export invoice no *</label><input name="invoice_no" required value="{{ form.get('invoice_no','') }}"></div>
+    <div><label>Export date *</label><input type="date" name="export_date" value="{{ form.get('export_date', today.isoformat()) }}"></div>
+    <div><label>Shipping bill no</label><input name="shipping_bill_no" value="{{ form.get('shipping_bill_no','') }}"></div>
+    <div><label>Shipping bill date</label><input type="date" name="shipping_bill_date" value="{{ form.get('shipping_bill_date','') }}"></div>
+    <div><label>Port of export</label><input name="port_of_export" value="{{ form.get('port_of_export', rules.form3_default_port_of_export) }}"></div>
+    <div><label>Consignee</label><input name="consignee" value="{{ form.get('consignee','') }}"></div>
+    <div><label>Country</label><input name="country" value="{{ form.get('country','') }}"></div>
+  </div>
+  <div class="table-wrap"><table class="lines" id="exlines">
+    <thead><tr><th>Goods</th><th>Export item name (as on invoice)</th><th class="n">Qty *</th><th class="n">FOB value ₹</th><th></th></tr></thead>
+    <tbody>
+    {% set targets = form.getlist('target') if form else [] %}
+    {% for i in range([targets|length, 1]|max) %}
+      <tr><td>{{ target_select(fg, items, targets[i] if targets else '') }}</td>
+        <td><input name="export_item_name" placeholder="e.g. Spare battery pack" value="{{ form.getlist('export_item_name')[i] if targets else '' }}"></td>
+        <td><input name="qty" inputmode="decimal" value="{{ form.getlist('qty')[i] if targets else '' }}"></td>
+        <td><input name="fob_value" inputmode="decimal" value="{{ form.getlist('fob_value')[i] if targets else '' }}"></td>
+        <td><button class="secondary" data-del-row>Remove</button></td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <div class="actions"><button class="secondary" data-add-row="exlines">Add line</button>
+    <button data-confirm="Post this export and recredit the bond(s)?">Post export</button></div>
+</form>
+{% endblock %}

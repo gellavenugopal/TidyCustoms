@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - {{ brand.name }}{% endblock %}
+{% block body %}
+<section class="hero">
+  <div>
+    <h1>Bond dashboard</h1>
+    <p class="sub">Duty-saved stock under bond: what's debited, what's back, what's still in stock - as on {{ today|dt }}.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="k">Bond balance available</div><div class="v">{{ inr(d.balance) }}</div>
+        <div class="d">of {{ inr(d.amount) }} across active bonds</div></div>
+      <div class="kpi"><div class="k">Utilised</div><div class="v">{{ '%.0f'|format(d.util * 100) }}%</div>
+        <div class="d">{{ inr(d.used) }} debited and not yet recredited</div></div>
+      <div class="kpi"><div class="k">Duty saved in stock</div><div class="v">{{ inr(d.stock_dsv) }}</div>
+        <div class="d">raw material + inside finished goods</div></div>
+      <div class="kpi"><div class="k">Pending DTA duty</div><div class="v">{{ inr(d.pending_duty) }}</div>
+        <div class="d">{{ d.pending|length }} clearance(s) awaiting payment</div></div>
+      <div class="kpi"><div class="k">Debited this FY</div><div class="v">{{ inr(d.fy_debit) }}</div>
+        <div class="d">imports since {{ d.fy|dt }}</div></div>
+      <div class="kpi"><div class="k">Recredited this FY</div><div class="v">{{ inr(d.fy_credit) }}</div>
+        <div class="d">exports and DTA since {{ d.fy|dt }}</div></div>
+    </div>
+    {% if can_edit %}
+    <div class="actions">
+      <a class="btn" href="{{ url_for('main.doc_upload', kind='imports') }}">Upload Bills of Entry</a>
+      <a class="btn secondary" href="{{ url_for('main.doc_upload', kind='exports') }}">Upload Shipping Bills</a>
+      <a class="btn secondary" href="{{ url_for('main.production_new') }}">Record production</a>
+      <a class="btn secondary" href="{{ url_for('main.dta_new') }}">DTA clearance</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="feature">
+    <h2>Bond utilisation</h2>
+    <p class="muted" style="margin-top:-6px">Debited and not yet recredited, per bond</p>
+    {% for r in d.bonds %}
+    <div class="bondrow">
+      <div class="top"><span><b>{{ r.bond.bond_no }}</b> <span class="muted">· valid to {{ r.bond.valid_to|dt }}{% if r.bond.status == 'CLOSED' %} · closed{% elif r.days_left < 0 %} · expired{% elif r.days_left <= 60 %} · {{ r.days_left }} days left{% endif %}</span></span>
+        <span>{{ inr(r.used) }} of {{ inr(r.bond.bond_amount) }} · <b>{{ '%.0f'|format(r.pct * 100) }}%</b></span></div>
+      <div class="track" role="img" aria-label="{{ r.bond.bond_no }} {{ '%.0f'|format(r.pct * 100) }}% utilised">
+        <span class="{{ 'hi' if r.pct >= 0.75 }}" style="width: {{ [r.pct * 100, 100]|min|round(1) }}%"></span></div>
+      <div class="muted" style="font-size:12.5px;margin-top:6px">Balance {{ inr(r.bond.balance) }} ·
+        <a href="{{ url_for('main.report', name='ledger', bond_id=r.bond.id) }}">ledger</a> ·
+        <a href="{{ url_for('main.report', name='stock', bond_id=r.bond.id) }}">stock</a></div>
+    </div>
+    {% else %}
+    <p>No bonds yet. <a href="{{ url_for('main.bonds') }}">Create a bond</a> to start.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="dash-grid">
+  <div class="chart-card span-8">
+    <h3>Bond debits and credits by month</h3>
+    <p class="cap">Last 12 months, all bonds. Debits = duty saved on imports; credits = duty saved recredited on exports and paid DTA clearances.</p>
+    <div class="legend"><span><i style="background:var(--series-1)"></i>Debits (imports)</span><span><i style="background:var(--series-2)"></i>Credits (exports / DTA)</span></div>
+    {{ monthly_chart }}
+    <details><summary>View as table</summary>
+      <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Month</th><th class="n">Debits</th><th class="n">Credits</th></tr></thead><tbody>
+      {% for m in d.months %}<tr><td>{{ month_full[loop.index0] }}</td><td class="n">{{ d.monthly[m].debit|money }}</td><td class="n">{{ d.monthly[m].credit|money }}</td></tr>{% endfor %}
+      </tbody></table></div></details>
+  </div>
+
+  <div class="chart-card span-4">
+    <h3>Needs attention</h3>
+    <p class="cap">Bonds near expiry or limit, unmapped lines, unpaid DTA duty</p>
+    <div class="alerts">
+      {% for kind, icon, text in d.alerts %}<div class="alert {{ kind }}"><span class="ic" aria-hidden="true">{{ icon }}</span><span>{{ text }}</span></div>{% endfor %}
+    </div>
+    {% if d.drafts %}<h3 style="margin-top:18px">Draft imports</h3>
+    <div class="alerts" style="margin-top:8px">{% for inv in d.drafts[:5] %}
+      <a class="alert" href="{{ url_for('main.import_view', invoice_id=inv.id) }}" style="color:inherit;text-decoration:none">
+        <span class="ic" style="background:var(--accent-soft);color:var(--accent)">↗</span>
+        <span><b>{{ inv.invoice_no }}</b> · {{ inv.supplier.name }}<br><span class="muted">{{ inv.bond_label }} · {{ inv.lines|selectattr('item_id', 'none')|list|length }} unmapped</span></span></a>
+    {% endfor %}</div>{% endif %}
+  </div>
+
+  <div class="chart-card span-7">
+    <h3>Duty saved in stock - top items</h3>
+    <p class="cap">Raw material plus inputs inside unsold finished goods, across all bonds</p>
+    {{ items_chart }}
+    <details><summary>View as table</summary>
+      <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Item</th><th>Description</th><th class="n">Duty saved</th></tr></thead><tbody>
+      {% for i in d.top_items %}<tr><td>{{ i.item }}</td><td>{{ i.description }}</td><td class="n">{{ i.dsv|money }}</td></tr>{% else %}<tr><td colspan="3" class="muted">No stock.</td></tr>{% endfor %}
+      </tbody></table></div></details>
+  </div>
+
+  <div class="chart-card span-5">
+    <h3>Where the duty-saved stock sits</h3>
+    <p class="cap">Share of {{ inr(d.stock_dsv) }} duty saved still in stock</p>
+    <div class="legend"><span><i style="background:var(--series-1)"></i>Raw material</span><span><i style="background:var(--series-2)"></i>Inside unsold finished goods</span></div>
+    {{ share_chart }}
+    <div class="kpis" style="margin-top:14px">
+      <div class="kpi"><div class="k">Raw material</div><div class="v" style="font-size:19px">{{ inr(d.rm_dsv) }}</div></div>
+      <div class="kpi"><div class="k">Inside finished goods</div><div class="v" style="font-size:19px">{{ inr(d.fg_dsv) }}</div></div>
+    </div>
+    <p class="muted" style="font-size:13px;margin-bottom:0">Duty-paid stock (no bond) on hand: {{ inr(d.paid_av) }} assessable value - not part of any bond.</p>
+  </div>
+
+  <div class="chart-card span-12">
+    <h3>Recent bond activity</h3>
+    <p class="cap">Latest ledger entries across all bonds · <a href="{{ url_for('main.report', name='ledger') }}">full ledger</a></p>
+    <div class="table-wrap activity"><table>
+      <thead><tr><th>Date</th><th>Bond</th><th>Entry</th><th>Reference</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance after</th></tr></thead>
+      <tbody>{% for e in d.recent %}
+        <tr><td>{{ e.entry_date|dt }}</td><td>{{ e.bond.bond_no }}</td><td><span class="tag">{{ e.entry_type|replace('_', ' ')|title }}</span></td>
+          <td>{{ e.source_ref }}</td><td class="n">{{ e.debit|money if e.debit else '' }}</td><td class="n">{{ e.credit|money if e.credit else '' }}</td><td class="n">{{ e.balance_after|money }}</td></tr>
+      {% else %}<tr><td colspan="7" class="muted">No activity yet.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}
