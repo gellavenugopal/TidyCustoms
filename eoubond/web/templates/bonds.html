@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_macros.html" import csrf %}
 {% block body %}
 <h1>Bonds</h1>
-<p class="sub">Imports debit the bond by the duty-saved value; exports and paid DTA clearances credit it back. Pick a working bond in the top bar to default entries and reports to it.</p>
+<p class="sub">Imports debit the bond by the duty-saved value; exports and paid DTA clearances credit it back. Pick a working bond in the sidebar to default entries and reports to it.</p>
 {% if can_edit %}
 <form method="post" class="panel">{{ csrf() }}
   <div class="grid">

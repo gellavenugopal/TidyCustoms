@@ -38,6 +38,12 @@ def _upload_dir():
     return d
 
 
+@bp.route("/settings/templates")
+@role_required("operator")
+def template_library():
+    return render_template("template_library.html", kinds=KINDS)
+
+
 @bp.route("/<kind>/upload")
 @role_required("operator")
 def doc_upload(kind):

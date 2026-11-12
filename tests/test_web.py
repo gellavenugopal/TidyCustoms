@@ -9,7 +9,7 @@ from openpyxl import load_workbook
 from werkzeug.security import generate_password_hash
 
 from eoubond import db
-from eoubond.models import Bond, ClientAccess, DescriptionMapping, User
+from eoubond.models import Bond, Client, ClientAccess, DescriptionMapping, User
 from eoubond.web import create_app
 
 
@@ -60,6 +60,73 @@ def test_viewer_cannot_post(app):
     assert "Viewers cannot edit" in r.get_data(as_text=True)
     with db.SessionLocal() as s:
         assert s.query(Bond).count() == 0
+
+
+@pytest.mark.parametrize(("username", "role", "expected"), [
+    ("viewer", "viewer", {"/items"}),
+    ("operator", "operator", {"/items", "/settings/templates"}),
+    ("manager", "admin", {"/items", "/settings/templates", "/users", "/admin/backup"}),
+    ("admin", "superadmin", {"/items", "/settings/templates", "/users", "/admin/backup",
+                             "/clients", "/admin/audit"}),
+])
+def test_sidebar_groups_respect_roles(app, username, role, expected):
+    if role in ("operator", "admin"):
+        with db.SessionLocal() as s:
+            user = User(username=username, password_hash=generate_password_hash("password1"), role=role)
+            s.add(user)
+            s.flush()
+            s.add(ClientAccess(user_id=user.id, client_id=1, role=role))
+            s.commit()
+    c = app.test_client()
+    passwords = {"viewer": "viewpass1", "admin": "adminpass1"}
+    login(c, username, passwords.get(username, "password1"))
+    html = c.get("/").get_data(as_text=True)
+    workspace = re.search(r'<nav class="sidebar-nav" aria-label="Workspace">(.*?)</nav>', html, re.S).group(1)
+    settings = re.search(r'<nav class="sidebar-nav settings-nav" aria-label="Settings">(.*?)</nav>',
+                         html, re.S).group(1)
+    assert all(f'href="{path}"' in workspace for path in
+               ("/", "/bonds", "/imports", "/production", "/exports", "/dta", "/reports", "/returns/form3"))
+    settings_paths = {"/items", "/settings/templates", "/users", "/admin/backup", "/clients", "/admin/audit"}
+    assert {path for path in settings_paths if f'href="{path}"' in settings} == expected
+    assert 'href="/settings/templates"' not in workspace
+    assert 'action="/select-client"' in html and 'action="/select-bond"' in html
+    assert 'action="/logout"' in html
+    if role == "viewer":
+        assert c.get("/settings/templates").status_code == 302
+        assert c.get("/items").status_code == 200
+    else:
+        assert c.get("/settings/templates").status_code == 200
+
+
+def test_settings_templates_and_existing_workflow_links(app):
+    c = app.test_client()
+    login(c)
+    html = c.get("/settings/templates").get_data(as_text=True)
+    assert re.search(r'<details class="settings-group"\s+open>', html)
+    assert re.search(r'<a href="/settings/templates" class="on" aria-current="page">Templates</a>', html)
+    for kind in ("imports", "exports", "boms"):
+        assert f'href="/{kind}/upload"' in html
+        assert f'href="/{kind}/upload/blank"' in html
+        assert c.get(f"/{kind}/upload").status_code == 200
+        download = c.get(f"/{kind}/upload/blank")
+        assert download.status_code == 200
+        load_workbook(io.BytesIO(download.data))
+    for page, kind in (("/", "imports"), ("/", "exports"), ("/imports", "imports"),
+                       ("/exports", "exports"), ("/models", "boms")):
+        assert f'href="/{kind}/upload"' in c.get(page).get_data(as_text=True)
+
+
+def test_superadmin_navigation_without_active_client(app):
+    with db.SessionLocal() as s:
+        s.get(Client, 1).active = False
+        s.commit()
+    c = app.test_client()
+    login(c)
+    html = c.get("/clients").get_data(as_text=True)
+    assert 'href="/clients" class="on" aria-current="page"' in html
+    assert 'href="/admin/audit"' in html
+    assert 'aria-label="Workspace"' not in html
+    assert 'href="/settings/templates"' not in html
 
 
 def test_full_flow_and_all_pages(app):

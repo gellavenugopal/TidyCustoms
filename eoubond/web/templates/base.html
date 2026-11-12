@@ -14,35 +14,36 @@
 <body>
 {% if current_user %}
 {% set ep = request.endpoint or '' %}{% set kind_arg = (request.view_args or {}).get('kind') %}
-<header class="topbar"><div class="inner">
+{% set masters_eps = ('main.items','main.item_edit','main.suppliers','main.models','main.bom_new','main.bom_view','main.mappings') %}
+{% set settings_active = ep in masters_eps or ep in ('main.clients', 'main.admin_audit', 'main.users', 'main.backup_page', 'main.template_library') or (ep.startswith('main.doc_') and kind_arg == 'boms') %}
+<div class="app-layout">
+<input type="checkbox" id="sidebar-toggle" class="sidebar-toggle" aria-controls="sidebar">
+<label for="sidebar-toggle" class="sidebar-toggle-label">☰ Menu <span>{{ current_client.name if current_client else brand.name }}</span></label>
+<aside id="sidebar" class="sidebar" aria-label="Sidebar">
   <a class="brand" href="{{ url_for('main.dashboard') }}">
     <span class="mark">{{ brand.mark }}</span>
     <span><span class="name">{{ brand.name }}</span><br><span class="tagline">{{ brand.tagline }}</span></span>
   </a>
   {% if brand.credit %}<div class="credit"><small>{{ brand.credit_label }}</small><b>{{ brand.credit }}</b></div>{% endif %}
-  <div class="right">
-    {% if current_client %}
+  {% if current_client %}
+  <div class="sidebar-context">
     <form method="post" action="{{ url_for('main.select_client') }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-      <select name="client_id" onchange="this.form.submit()" title="Working client" aria-label="Working client">
+      <label for="working-client">Client</label>
+      <select id="working-client" name="client_id" onchange="this.form.submit()" title="Working client">
         {% for c in available_clients %}<option value="{{ c.id }}" {{ 'selected' if c.id == current_client.id }}>{{ c.code }} - {{ c.name }}</option>{% endfor %}
       </select>
     </form>
     <form method="post" action="{{ url_for('main.select_bond') }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-      <select name="bond_id" onchange="this.form.submit()" title="Working bond (default for entries and reports)" aria-label="Working bond">
+      <label for="working-bond">Working bond</label>
+      <select id="working-bond" name="bond_id" onchange="this.form.submit()" title="Working bond (default for entries and reports)">
         <option value="">All bonds</option>
         {% for b in all_bonds %}<option value="{{ b.id }}" {{ 'selected' if b.id == selected_bond_id }}>{{ b.bond_no }}{{ ' (closed)' if b.status == 'CLOSED' }}</option>{% endfor %}
       </select>
     </form>
-    {% endif %}
-    <span class="userchip"><span class="av">{{ current_user.username[:1]|upper }}</span>
-      <a href="{{ url_for('main.change_password') }}" style="color:inherit">{{ current_user.username }} · {{ 'super-admin' if is_superadmin else (current_role or 'no client access') }}</a></span>
-    <form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="link">Log out</button></form>
   </div>
-</div></header>
-<nav class="nav" aria-label="Modules"><div class="inner">
-  {% set masters_eps = ('main.items','main.item_edit','main.suppliers','main.models','main.bom_new','main.bom_view','main.mappings') %}
+  {% endif %}
   {% set modules = [
     ('main.dashboard', '◧', 'Dashboard', ep == 'main.dashboard'),
     ('main.bonds', '⛨', 'Bonds', 'bond' in ep),
@@ -52,21 +53,35 @@
     ('main.dta', '₹', 'DTA', 'dta' in ep),
     ('main.reports_index', '▤', 'Reports', 'report' in ep),
     ('main.form3_return', '☰', 'Form III', ep == 'main.form3_return'),
-    ('main.items', '▦', 'Masters', ep in masters_eps or (ep.startswith('main.doc_') and kind_arg == 'boms')),
   ] %}
-  {% if current_client %}{% for endpoint, icon, label, on in modules %}
-  <a href="{{ url_for(endpoint) }}" class="{{ 'on' if on }}" {{ 'aria-current="page"'|safe if on }}><span class="ic" aria-hidden="true">{{ icon }}</span>{{ label }}</a>
-  {% endfor %}{% endif %}
-  {% if is_superadmin %}
-  <a href="{{ url_for('main.clients') }}" class="{{ 'on' if ep=='main.clients' }}">Clients</a>
-  <a href="{{ url_for('main.admin_audit') }}" class="{{ 'on' if ep=='main.admin_audit' }}">Admin audit</a>
+  {% if current_client %}
+  <nav class="sidebar-nav" aria-label="Workspace">
+    <div class="sidebar-heading">Workspace</div>
+    {% for endpoint, icon, label, on in modules %}
+    <a href="{{ url_for(endpoint) }}" class="{{ 'on' if on }}" {{ 'aria-current="page"'|safe if on }}><span class="ic" aria-hidden="true">{{ icon }}</span>{{ label }}</a>
+    {% endfor %}
+  </nav>
   {% endif %}
-  {% if is_admin %}
-  <span class="sep" aria-hidden="true"></span>
-  <a href="{{ url_for('main.users') }}" class="{{ 'on' if ep=='main.users' }}"><span class="ic" aria-hidden="true">☺</span>Users</a>
-  <a href="{{ url_for('main.backup_page') }}" class="{{ 'on' if ep=='main.backup_page' }}"><span class="ic" aria-hidden="true">⟲</span>Backup</a>
+  {% if current_client or is_superadmin %}
+  <details class="settings-group" {{ 'open' if settings_active }}>
+    <summary><span class="ic" aria-hidden="true">⚙</span> Settings</summary>
+    <nav class="sidebar-nav settings-nav" aria-label="Settings">
+      {% if is_superadmin %}<a href="{{ url_for('main.clients') }}" class="{{ 'on' if ep == 'main.clients' }}" {{ 'aria-current="page"'|safe if ep == 'main.clients' }}>Clients</a>{% endif %}
+      {% if is_admin %}<a href="{{ url_for('main.users') }}" class="{{ 'on' if ep == 'main.users' }}" {{ 'aria-current="page"'|safe if ep == 'main.users' }}>Users</a>{% endif %}
+      {% if current_client %}<a href="{{ url_for('main.items') }}" class="{{ 'on' if ep in masters_eps or (ep.startswith('main.doc_') and kind_arg == 'boms') }}" {{ 'aria-current="page"'|safe if ep in masters_eps or (ep.startswith('main.doc_') and kind_arg == 'boms') }}>Masters</a>{% endif %}
+      {% if can_edit %}<a href="{{ url_for('main.template_library') }}" class="{{ 'on' if ep == 'main.template_library' }}" {{ 'aria-current="page"'|safe if ep == 'main.template_library' }}>Templates</a>{% endif %}
+      {% if is_admin %}<a href="{{ url_for('main.backup_page') }}" class="{{ 'on' if ep == 'main.backup_page' }}" {{ 'aria-current="page"'|safe if ep == 'main.backup_page' }}>Backup</a>{% endif %}
+      {% if is_superadmin %}<a href="{{ url_for('main.admin_audit') }}" class="{{ 'on' if ep == 'main.admin_audit' }}" {{ 'aria-current="page"'|safe if ep == 'main.admin_audit' }}>Admin audit</a>{% endif %}
+    </nav>
+  </details>
   {% endif %}
-</div></nav>
+  <div class="sidebar-account">
+    <span class="userchip"><span class="av">{{ current_user.username[:1]|upper }}</span>
+      <a href="{{ url_for('main.change_password') }}">{{ current_user.username }} · {{ 'super-admin' if is_superadmin else (current_role or 'no client access') }}</a></span>
+    <form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="link">Log out</button></form>
+  </div>
+</aside>
+<div class="app-content">
 {% endif %}
 <main>
   {% with msgs = get_flashed_messages(with_categories=true) %}
@@ -74,6 +89,7 @@
   {% endwith %}
   {% block body %}{% endblock %}
 </main>
+{% if current_user %}</div></div>{% endif %}
 <div class="viz-tip" id="viz-tip" role="tooltip"></div>
 </body>
 </html>

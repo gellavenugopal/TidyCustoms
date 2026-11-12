@@ -25,9 +25,9 @@ production, SQLite for local development.
    work; close it to stop the app.
 4. On first start the app asks you to **create the administrator** - or to
    **restore from a backup** if you are reinstalling.
-5. Sign in as the super-admin, open **Clients**, and add each client. The
+5. Sign in as the super-admin, open **Settings → Clients**, and add each client. The
    existing records are assigned to the editable **Existing data** client.
-   Select a client in the header, then use **Users** to create users or assign
+   Select a client in the sidebar, then use **Settings → Users** to create users or assign
    existing users a role for that client.
 
 Where things are kept:
@@ -235,7 +235,7 @@ Business rules in `config/rules.toml` are shared by all clients.
 | Area | What you can do |
 |---|---|
 | Dashboard | Bond balances and utilisation, pending DTA duty, draft imports with unmapped lines |
-| Bonds | Create, edit (amount / validity / status), select the working bond (top bar), view ledger / monthly / stock |
+| Bonds | Create, edit (amount / validity / status), select the working bond (sidebar), view ledger / monthly / stock |
 | Imports | Enter invoice + lines → draft; resolve unmapped descriptions (remember per supplier or for all suppliers); post (debits bond); cancel an untouched import |
 | Production | Check availability per component, post a batch; view FIFO consumption per lot |
 | Exports | Finished detectors and accessories (each with its export invoice name); view the lot-by-lot recredit trace |
@@ -323,10 +323,13 @@ register** shows the same heads for the imported inputs in each export line
 The interface follows a light "grid canvas" style with navy feature panels
 (Lexend headings, IBM Plex Sans text; system fonts when offline). It is
 light-only by choice - it stays on a white / light background even when the
-computer is in dark mode. Modules and Masters sections are buttons with icons. The dashboard shows KPIs, bond
+computer is in dark mode. The sidebar separates daily **Workspace** modules
+from **Settings** for clients, users, masters, templates, backups and admin audit,
+according to the user's role. Template workflows remain available from the
+relevant workspace screens. The dashboard shows KPIs, bond
 utilisation, monthly debits vs credits, duty saved in stock by item, where the
 stock sits, alerts and recent activity - every chart has a hover tooltip and a
-table view. Header branding is set in `.env`: `BRAND_NAME`, `BRAND_TAGLINE`,
+table view. Sidebar branding is set in `.env`: `BRAND_NAME`, `BRAND_TAGLINE`,
 `BRAND_MARK` (2-3 letters), and `BRAND_CREDIT` / `BRAND_CREDIT_LABEL` for a
 "Designed & developed by" line (hidden when blank).
 
@@ -345,7 +348,7 @@ Tests recalculate these workbooks and compare every figure with the app.
 
 ### Form III quarterly return
 
-**Form III** (top bar) builds the quarterly return in the same layout as the filed
+**Form III** (sidebar) builds the quarterly return in the same layout as the filed
 `Form3_Q4.xls`: the same six sheets ("Details of Goods", "Re-Export", "Goods
 cleared on payment", "Job Worker Unit", "Unit Transfer", "End Use Recipient"),
 the same column headings in the same order, BE and clearance dates as

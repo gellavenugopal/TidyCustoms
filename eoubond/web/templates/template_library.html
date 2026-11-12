@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Templates - {{ brand.name }}{% endblock %}
+{% block body %}
+<h1>Templates</h1>
+<p class="sub">Download templates for the selected client, or open a workflow to upload and preview a completed file.</p>
+<div class="cards">
+  {% for kind, k in kinds.items() %}
+  <div class="card">
+    <h2 style="margin-top:0">{{ k.title }}</h2>
+    <p class="muted">{% if kind == 'imports' %}Blank Bill of Entry template.
+      {% elif kind == 'exports' %}Export template with the current stock on hand.
+      {% else %}BOM template with the current models and BOMs.{% endif %}</p>
+    <div class="actions">
+      <a class="btn" href="{{ url_for('main.doc_blank', kind=kind) }}">Download template</a>
+      <a href="{{ url_for('main.doc_upload', kind=kind) }}">Open workflow</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
