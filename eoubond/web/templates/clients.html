@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf %}
+{% block body %}
+<h1>Clients</h1>
+{% if is_superadmin %}
+<p class="sub">Create clients here. Use the client selector in the header to work with their data and users.</p>
+<form method="post" class="panel">{{ csrf() }}
+  <h2>Add client</h2>
+  <div class="grid">
+    <div><label>Client name *</label><input name="name" required maxlength="128"></div>
+    <div><label>IEC code</label><input name="iec_code" maxlength="32"></div>
+    <div><label>GSTIN</label><input name="gstin" maxlength="32"></div>
+    <div><label>Address</label><input name="address"></div>
+  </div><div class="actions"><button>Add client</button></div>
+</form>
+{% for c in clients %}
+<form method="post" class="panel">{{ csrf() }}<input type="hidden" name="client_id" value="{{ c.id }}">
+  <h2>{{ c.code }}</h2>
+  <div class="grid">
+    <div><label>Client name *</label><input name="name" value="{{ c.name }}" required maxlength="128"></div>
+    <div><label>IEC code</label><input name="iec_code" value="{{ c.iec_code or '' }}" maxlength="32"></div>
+    <div><label>GSTIN</label><input name="gstin" value="{{ c.gstin or '' }}" maxlength="32"></div>
+    <div><label>Address</label><input name="address" value="{{ c.address or '' }}"></div>
+  </div><div class="actions"><button class="secondary">Save</button></div>
+</form>
+{% endfor %}
+{% else %}
+{% if clients %}<p>Choose an assigned client from the selector above.</p>
+{% else %}<p>You do not have access to a client. Please contact a super-admin.</p>{% endif %}
+{% endif %}
+{% endblock %}

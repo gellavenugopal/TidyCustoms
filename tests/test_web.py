@@ -9,7 +9,7 @@ from openpyxl import load_workbook
 from werkzeug.security import generate_password_hash
 
 from eoubond import db
-from eoubond.models import Bond, DescriptionMapping, User
+from eoubond.models import Bond, ClientAccess, DescriptionMapping, User
 from eoubond.web import create_app
 
 
@@ -17,8 +17,12 @@ from eoubond.web import create_app
 def app(tmp_path):
     app = create_app(f"sqlite:///{(tmp_path / 'web.db').as_posix()}", create_all=True, testing=True)
     with db.SessionLocal() as s:
-        s.add_all([User(username="admin", password_hash=generate_password_hash("adminpass1"), role="admin"),
-                   User(username="viewer", password_hash=generate_password_hash("viewpass1"), role="viewer")])
+        admin = User(username="admin", password_hash=generate_password_hash("adminpass1"), role="admin",
+                     is_superadmin=True)
+        viewer = User(username="viewer", password_hash=generate_password_hash("viewpass1"), role="viewer")
+        s.add_all([admin, viewer])
+        s.flush()
+        s.add(ClientAccess(user_id=viewer.id, client_id=1, role="viewer"))
         s.commit()
     yield app
     db.engine.dispose()

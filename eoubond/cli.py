@@ -30,11 +30,11 @@ def upgrade() -> None:
 
 
 def create_user(username: str, password: str | None, role: str, full_name: str | None) -> None:
-    from sqlalchemy import select
+    from sqlalchemy import func, select
     from werkzeug.security import generate_password_hash
 
     from .audit_context import acting_as
-    from .models import User
+    from .models import ClientAccess, User
 
     password = password or getpass.getpass("Password: ")
     if len(password) < 8:
@@ -43,8 +43,13 @@ def create_user(username: str, password: str | None, role: str, full_name: str |
     with acting_as("cli"), db.SessionLocal() as s:
         if s.scalar(select(User).where(User.username == username)):
             sys.exit(f"User {username} already exists")
-        s.add(User(username=username, full_name=full_name, role=role,
-                   password_hash=generate_password_hash(password)))
+        first_user = s.scalar(select(func.count(User.id))) == 0
+        user = User(username=username, full_name=full_name, role=role,
+                    is_superadmin=first_user and role == "admin",
+                    password_hash=generate_password_hash(password))
+        s.add(user)
+        s.flush()
+        s.add(ClientAccess(user_id=user.id, client_id=1, role=role))
         s.commit()
     print(f"Created {role} user {username}")
 

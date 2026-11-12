@@ -6,7 +6,7 @@ from flask import Blueprint, flash, g, redirect, render_template, request, sessi
 from sqlalchemy import func, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from ..models import Bond, DTAClearance, ImportInvoice, ImportLine, User
+from ..models import Bond, DTAClearance, ImportInvoice, ImportLine, SystemState, User
 from ..services.errors import BusinessError
 from . import login_required, role_required
 
@@ -38,6 +38,7 @@ def login():
             token = session.get("_csrf")
             session.clear()
             session["uid"] = u.id
+            session["epoch"] = g.db.get(SystemState, 1).session_epoch
             session["_csrf"] = token
             nxt = request.args.get("next") or ""
             return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("main.dashboard"))
@@ -79,42 +80,16 @@ def dashboard():
 @login_required
 def select_bond():
     bid = request.form.get("bond_id")
-    session["bond_id"] = int(bid) if bid else None
+    try:
+        bond_id = int(bid) if bid else None
+    except ValueError:
+        from flask import abort
+        abort(400)
+    if bond_id and not g.db.get(Bond, bond_id):
+        from flask import abort
+        abort(404)
+    session["bond_id"] = bond_id
     return redirect(request.referrer or url_for("main.dashboard"))
-
-
-@bp.route("/users", methods=["GET", "POST"])
-@role_required("admin")
-def users():
-    if request.method == "POST":
-        def go():
-            action = request.form.get("action")
-            if action == "create":
-                name = request.form.get("username", "").strip()
-                pw = request.form.get("password", "")
-                if not name or len(pw) < 8:
-                    raise BusinessError("Username and a password of at least 8 characters are required")
-                if g.db.scalar(select(User).where(User.username == name)):
-                    raise BusinessError("Username already exists")
-                g.db.add(User(username=name, full_name=request.form.get("full_name") or None,
-                              password_hash=generate_password_hash(pw), role=request.form.get("role", "viewer")))
-            else:
-                u = g.db.get(User, int(request.form["user_id"]))
-                if u.id == g.user.id:
-                    raise BusinessError("You cannot change your own account here")
-                if action == "toggle":
-                    u.active = not u.active
-                elif action == "role":
-                    u.role = request.form.get("role", u.role)
-                elif action == "password":
-                    pw = request.form.get("password", "")
-                    if len(pw) < 8:
-                        raise BusinessError("Password must be at least 8 characters")
-                    u.password_hash = generate_password_hash(pw)
-            g.db.flush()
-        commit_or_flash(go, "User updated")
-        return redirect(url_for("main.users"))
-    return render_template("users.html", users=list(g.db.scalars(select(User).order_by(User.username))))
 
 
 @bp.route("/account/password", methods=["GET", "POST"])

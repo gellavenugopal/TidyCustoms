@@ -91,7 +91,7 @@ def import_new():
 def import_view(invoice_id):
     inv = _get(ImportInvoice, invoice_id)
     if request.method == "POST":
-        if g.user.role == "viewer":
+        if g.role == "viewer":
             flash("Viewers cannot edit", "error")
             return redirect(url_for("main.import_view", invoice_id=invoice_id))
         action = request.form.get("action")
@@ -268,7 +268,7 @@ def _dta_computation_report(clr) -> list[Report]:
 def dta_view(clearance_id):
     clr = _get(DTAClearance, clearance_id)
     if request.method == "POST":
-        if g.user.role == "viewer":
+        if g.role == "viewer":
             flash("Viewers cannot edit", "error")
         else:
             commit_or_flash(lambda: dta_svc.mark_paid(

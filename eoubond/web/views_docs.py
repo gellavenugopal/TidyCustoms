@@ -33,7 +33,7 @@ def _kind(kind):
 
 
 def _upload_dir():
-    d = config.data_dir() / "uploads"
+    d = config.data_dir() / "uploads" / str(g.client.id) / str(g.user.id)
     d.mkdir(parents=True, exist_ok=True)
     return d
 

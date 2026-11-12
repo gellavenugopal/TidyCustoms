@@ -1,29 +1,42 @@
 {% extends "base.html" %}{% from "_macros.html" import csrf %}
 {% block body %}
-<h1>Users</h1>
-<p class="sub">admin: everything incl. users · operator: data entry and posting · viewer: read-only and Excel export.</p>
+<h1>Users - {{ current_client.name }}</h1>
+<p class="sub">Roles apply to the selected client: admin manages its users, operator enters data, and viewer has read-only access.</p>
 <form method="post" class="panel">{{ csrf() }}<input type="hidden" name="action" value="create">
+  <h2>Create user</h2>
   <div class="grid">
-    <div><label>Username *</label><input name="username" required></div>
-    <div><label>Full name</label><input name="full_name"></div>
+    <div><label>Username *</label><input name="username" required maxlength="64"></div>
+    <div><label>Full name</label><input name="full_name" maxlength="128"></div>
     <div><label>Password * (min 8)</label><input name="password" type="password" required minlength="8"></div>
-    <div><label>Role</label><select name="role"><option>viewer</option><option>operator</option><option>admin</option></select></div>
+    <div><label>Client role</label><select name="role">{% for r in roles %}<option>{{ r }}</option>{% endfor %}</select></div>
   </div>
   <div class="actions"><button>Add user</button></div>
 </form>
+<form method="post" class="panel">{{ csrf() }}<input type="hidden" name="action" value="assign">
+  <h2>Assign an existing user to this client</h2>
+  <div class="grid"><div><label>Username</label><input name="username" required></div>
+    <div><label>Client role</label><select name="role">{% for r in roles %}<option>{{ r }}</option>{% endfor %}</select></div></div>
+  <div class="actions"><button>Assign</button></div>
+</form>
 <div class="table-wrap"><table>
-  <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Active</th><th>Actions</th></tr></thead>
+  <thead><tr><th>Username</th><th>Name</th><th>Client role</th><th>Active</th><th>Actions</th></tr></thead>
   <tbody>{% for u in users %}
-  <tr><td>{{ u.username }}</td><td>{{ u.full_name or '' }}</td><td>{{ u.role }}</td><td>{{ 'Yes' if u.active else 'No' }}</td>
+  <tr><td>{{ u.username }}{% if u.is_superadmin %} (super-admin){% endif %}</td><td>{{ u.full_name or '' }}</td>
+    <td>{{ access[u.id].role if u.id in access else 'Not assigned' }}</td><td>{{ 'Yes' if u.active else 'No' }}</td>
     <td>{% if u.id != current_user.id %}
+      {% if u.id in access and (is_superadmin or not u.is_superadmin) %}
       <form method="post" style="display:inline-flex;gap:6px">{{ csrf() }}<input type="hidden" name="user_id" value="{{ u.id }}">
-        <select name="role" style="width:auto">{% for r in ('viewer','operator','admin') %}<option {{ 'selected' if u.role==r }}>{{ r }}</option>{% endfor %}</select>
+        <select name="role" style="width:auto">{% for r in roles %}<option {{ 'selected' if access[u.id].role==r }}>{{ r }}</option>{% endfor %}</select>
         <button class="secondary" name="action" value="role">Set role</button>
-        <button class="secondary" name="action" value="toggle">{{ 'Disable' if u.active else 'Enable' }}</button>
-      </form>
+        <button class="secondary" name="action" value="remove">Remove client access</button>
+      </form>{% endif %}
+      {% if is_superadmin or (u.id in access and not u.is_superadmin) %}
       <form method="post" style="display:inline-flex;gap:6px">{{ csrf() }}<input type="hidden" name="user_id" value="{{ u.id }}">
+        <button class="secondary" name="action" value="toggle">{{ 'Disable' if u.active else 'Enable' }}</button>
         <input name="password" type="password" placeholder="new password" minlength="8" style="width:140px">
-        <button class="secondary" name="action" value="password">Reset</button></form>
+        <button class="secondary" name="action" value="password">Reset</button>
+        {% if is_superadmin %}<button class="secondary" name="action" value="superadmin">{{ 'Remove super-admin' if u.is_superadmin else 'Make super-admin' }}</button>{% endif %}
+      </form>{% endif %}
       {% else %}<span class="muted">you</span>{% endif %}</td></tr>
   {% endfor %}</tbody>
 </table></div>

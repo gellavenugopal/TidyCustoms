@@ -1,45 +1,38 @@
 {% extends "base.html" %}{% from "_macros.html" import csrf %}
-{% block title %}Backup &amp; restore - EOU Bond Tracker{% endblock %}
+{% block title %}Backup &amp; restore{% endblock %}
 {% block body %}
 <h1>Backup &amp; restore</h1>
-<p class="sub">A backup is one .zip file with everything: users, masters, BOMs, mappings, bonds, ledger, stock lots, imports, production, exports, DTA clearances, the audit trail and the business rules. Restoring it on any PC (or in the cloud) brings all of it back.</p>
-
 {% if not safe %}
-<div class="flash error"><b>Your backups are not safe from a format yet.</b> They are being saved inside the app folder
-  (<span class="mono">{{ backup_dir }}</span>), so they would be lost with this PC. Set <span class="mono">BACKUP_DIR</span> in the
-  <span class="mono">.env</span> file to a folder in OneDrive, Google Drive or a network drive, then restart the app.
-  Until then, download a backup here regularly and keep it somewhere else.</div>
+<div class="flash error">Backups in {{ backup_dir }} are not off this PC. Set BACKUP_DIR in .env to a synced or network folder.</div>
 {% endif %}
-
 <div class="panel">
-  <h2 style="margin-top:0">1. Take a backup</h2>
-  <p>Automatic backups run every {{ interval|round|int }} hours while the app is running, into
-    <span class="mono">{{ backup_dir }}</span> (latest {{ keep }} kept).</p>
-  <a class="btn" href="{{ url_for('main.backup_download') }}">Back up now &amp; download</a>
-</div>
-
-<div class="panel">
-  <h2 style="margin-top:0">2. Restore from a backup</h2>
-  <div class="note">Restoring <b>replaces all current data</b> with the backup's. The current data is first saved as a
-    "before-restore" backup, so a restore can itself be undone. After restoring, everyone signs in again with the
-    users and passwords that were in the backup.</div>
+  <h2>Selected client: {{ current_client.name }}</h2>
+  <p>This backup contains this client's business records, not user accounts or other clients. It can only be restored to this client.</p>
+  <a class="btn" href="{{ url_for('main.backup_download', scope='client') }}">Download client backup</a>
   <form method="post" action="{{ url_for('main.backup_restore') }}" enctype="multipart/form-data">{{ csrf() }}
-    <div class="grid">
-      <div style="grid-column: span 2"><label>Backup file (.zip)</label><input type="file" name="backup_file" accept=".zip" required></div>
-      <div><label>Type RESTORE to confirm</label><input name="confirm" autocomplete="off" required></div>
-      <div><label><input type="checkbox" name="restore_rules" checked> Also restore business rules (rates)</label></div>
-    </div>
-    <div class="actions"><button class="danger" data-confirm="Replace ALL current data with this backup?">Restore</button></div>
+    <input type="hidden" name="scope" value="client">
+    <label>Client backup (.zip)</label><input type="file" name="backup_file" accept=".zip" required>
+    <label>Type RESTORE to replace this client's business data</label><input name="confirm" required autocomplete="off">
+    <button class="danger">Restore client</button>
   </form>
 </div>
-
-<h2>Backups in the backup folder</h2>
-<div class="table-wrap"><table>
-  <thead><tr><th>File</th><th>Type</th><th>Saved</th><th class="n">Size</th><th></th></tr></thead>
-  <tbody>{% for f in files %}
-    <tr><td class="mono">{{ f.name }}</td><td>{{ f.name.split('-')[1] if f.name.count('-') > 2 else '' }}{{ '-restore' if 'before-restore' in f.name }}</td>
-      <td>{{ f.mtime.strftime('%d-%m-%Y %H:%M') }}</td><td class="n">{{ '%.1f'|format(f.size / 1024) }} KB</td>
-      <td><a href="{{ url_for('main.backup_file', name=f.name) }}">Download</a></td></tr>
-  {% else %}<tr><td colspan="5" class="muted">No backups yet.</td></tr>{% endfor %}</tbody>
-</table></div>
+{% if is_superadmin %}
+<div class="panel">
+  <h2>Entire system</h2>
+  <p>Contains all clients, users and rules. Restoring replaces the entire system and signs everyone out. Old single-client backups can only be restored here.</p>
+  <a class="btn" href="{{ url_for('main.backup_download', scope='system') }}">Download system backup</a>
+  <form method="post" action="{{ url_for('main.backup_restore') }}" enctype="multipart/form-data">{{ csrf() }}
+    <input type="hidden" name="scope" value="system">
+    <label>System backup (.zip)</label><input type="file" name="backup_file" accept=".zip" required>
+    <label>Type RESTORE to replace all clients and users</label><input name="confirm" required autocomplete="off">
+    <label><input type="checkbox" name="restore_rules" checked> Restore business rules</label>
+    <button class="danger">Restore entire system</button>
+  </form>
+</div>
+<h2>Backups on this PC</h2>
+<div class="table-wrap"><table><thead><tr><th>File</th><th>Saved</th><th>Size</th><th></th></tr></thead>
+<tbody>{% for f in files %}<tr><td>{{ f.name }}</td><td>{{ f.mtime.strftime('%d-%m-%Y %H:%M') }}</td>
+<td>{{ '%.1f'|format(f.size / 1024) }} KB</td><td><a href="{{ url_for('main.backup_file', name=f.name) }}">Download</a></td></tr>
+{% else %}<tr><td colspan="4">No backups yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
 {% endblock %}

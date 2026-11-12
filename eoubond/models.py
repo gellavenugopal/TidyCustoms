@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
+import secrets
 
 from sqlalchemy import (
     Boolean,
@@ -44,6 +45,31 @@ class Stamped:
     created_by: Mapped[str | None] = mapped_column(String(64), default=current_username)
 
 
+class ClientScoped:
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), default=1, server_default="1", index=True)
+
+
+class Client(Base, Stamped):
+    __tablename__ = "clients"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    iec_code: Mapped[str | None] = mapped_column(String(32))
+    gstin: Mapped[str | None] = mapped_column(String(32))
+    address: Mapped[str | None] = mapped_column(Text)
+    backup_id: Mapped[str] = mapped_column(String(64), unique=True, default=lambda: secrets.token_urlsafe(32))
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+
+    @property
+    def code(self) -> str:
+        return f"CL{self.id:06d}"
+
+
+class SystemState(Base):
+    __tablename__ = "system_state"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_epoch: Mapped[str] = mapped_column(String(64), default=lambda: secrets.token_urlsafe(32))
+
+
 # ---------------------------------------------------------------- users / audit
 class User(Base, Stamped):
     __tablename__ = "users"
@@ -53,10 +79,21 @@ class User(Base, Stamped):
     password_hash: Mapped[str] = mapped_column(String(256))
     role: Mapped[str] = mapped_column(String(16), default="operator")  # admin|operator|viewer
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     __table_args__ = (CheckConstraint("role in ('admin','operator','viewer')", name="ck_user_role"),)
 
 
-class AuditLog(Base):
+class ClientAccess(Base):
+    __tablename__ = "client_access"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), primary_key=True)
+    role: Mapped[str] = mapped_column(String(16))
+    user: Mapped[User] = relationship()
+    client: Mapped[Client] = relationship()
+    __table_args__ = (CheckConstraint("role in ('admin','operator','viewer')", name="ck_access_role"),)
+
+
+class AuditLog(ClientScoped, Base):
     __tablename__ = "audit_log"
     id: Mapped[int] = mapped_column(primary_key=True)
     ts: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
@@ -68,20 +105,33 @@ class AuditLog(Base):
     new_values: Mapped[str | None] = mapped_column(Text)  # JSON
 
 
+class AdminAuditLog(Base):
+    __tablename__ = "admin_audit_log"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+    username: Mapped[str | None] = mapped_column(String(64))
+    action: Mapped[str] = mapped_column(String(8))
+    table_name: Mapped[str] = mapped_column(String(64), index=True)
+    record_id: Mapped[str | None] = mapped_column(String(64))
+    old_values: Mapped[str | None] = mapped_column(Text)
+    new_values: Mapped[str | None] = mapped_column(Text)
+
+
 # ---------------------------------------------------------------- master data
-class Supplier(Base, Stamped):
+class Supplier(ClientScoped, Base, Stamped):
     __tablename__ = "suppliers"
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(128), unique=True)
+    name: Mapped[str] = mapped_column(String(128))
     country: Mapped[str | None] = mapped_column(String(64))
+    __table_args__ = (UniqueConstraint("client_id", "name", name="uq_supplier_client_name"),)
 
 
-class Item(Base, Stamped):
+class Item(ClientScoped, Base, Stamped):
     """A component / raw material / accessory with a unique internal code."""
 
     __tablename__ = "items"
     id: Mapped[int] = mapped_column(primary_key=True)
-    code: Mapped[str] = mapped_column(String(32), unique=True)
+    code: Mapped[str] = mapped_column(String(32))
     description: Mapped[str] = mapped_column(String(255))
     uom: Mapped[str] = mapped_column(String(16), default="NOS")
     item_type: Mapped[str] = mapped_column(String(16), default="COMPONENT")  # COMPONENT|ACCESSORY
@@ -91,13 +141,14 @@ class Item(Base, Stamped):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     __table_args__ = (
         CheckConstraint("item_type in ('COMPONENT','ACCESSORY')", name="ck_item_type"),
+        UniqueConstraint("client_id", "code", name="uq_item_client_code"),
     )
 
     def __str__(self) -> str:
         return f"{self.code} - {self.description}"
 
 
-class DescriptionMapping(Base, Stamped):
+class DescriptionMapping(ClientScoped, Base, Stamped):
     """Supplier description -> internal item code. scope = supplier id or 'GLOBAL'."""
 
     __tablename__ = "description_mappings"
@@ -109,16 +160,16 @@ class DescriptionMapping(Base, Stamped):
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id"))
     item: Mapped[Item] = relationship()
     supplier: Mapped[Supplier | None] = relationship()
-    __table_args__ = (UniqueConstraint("scope", "normalized_description", name="uq_mapping_key"),)
+    __table_args__ = (UniqueConstraint("client_id", "scope", "normalized_description", name="uq_mapping_key"),)
 
 
-class ExportMapping(Base, Stamped):
+class ExportMapping(ClientScoped, Base, Stamped):
     """Shipping-bill description -> finished model or item, remembered from the
     export template so the same description is tagged automatically next time."""
 
     __tablename__ = "export_mappings"
     id: Mapped[int] = mapped_column(primary_key=True)
-    normalized_description: Mapped[str] = mapped_column(String(512), unique=True)
+    normalized_description: Mapped[str] = mapped_column(String(512))
     sample_description: Mapped[str] = mapped_column(String(512))
     model_id: Mapped[int | None] = mapped_column(ForeignKey("fg_models.id"))
     item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id"))
@@ -126,24 +177,26 @@ class ExportMapping(Base, Stamped):
     item: Mapped[Item | None] = relationship()
     __table_args__ = (
         CheckConstraint("(model_id IS NULL) <> (item_id IS NULL)", name="ck_export_mapping_one_target"),
+        UniqueConstraint("client_id", "normalized_description", name="uq_export_mapping_client_key"),
     )
 
 
-class FGModel(Base, Stamped):
+class FGModel(ClientScoped, Base, Stamped):
     """A finished-goods model, e.g. 4343 Gen5 or 2121 detector."""
 
     __tablename__ = "fg_models"
     id: Mapped[int] = mapped_column(primary_key=True)
-    code: Mapped[str] = mapped_column(String(32), unique=True)
+    code: Mapped[str] = mapped_column(String(32))
     name: Mapped[str] = mapped_column(String(128))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     boms: Mapped[list["BOM"]] = relationship(back_populates="model", order_by="BOM.version")
+    __table_args__ = (UniqueConstraint("client_id", "code", name="uq_model_client_code"),)
 
     def __str__(self) -> str:
         return f"{self.code} - {self.name}"
 
 
-class BOM(Base, Stamped):
+class BOM(ClientScoped, Base, Stamped):
     __tablename__ = "boms"
     id: Mapped[int] = mapped_column(primary_key=True)
     model_id: Mapped[int] = mapped_column(ForeignKey("fg_models.id"))
@@ -160,7 +213,7 @@ class BOM(Base, Stamped):
     )
 
 
-class BOMLine(Base):
+class BOMLine(ClientScoped, Base):
     __tablename__ = "bom_lines"
     id: Mapped[int] = mapped_column(primary_key=True)
     bom_id: Mapped[int] = mapped_column(ForeignKey("boms.id", ondelete="CASCADE"))
@@ -175,10 +228,10 @@ class BOMLine(Base):
 
 
 # ---------------------------------------------------------------- bonds
-class Bond(Base, Stamped):
+class Bond(ClientScoped, Base, Stamped):
     __tablename__ = "bonds"
     id: Mapped[int] = mapped_column(primary_key=True)
-    bond_no: Mapped[str] = mapped_column(String(64), unique=True)
+    bond_no: Mapped[str] = mapped_column(String(64))
     bond_amount: Mapped[Decimal] = mapped_column(MONEY)
     valid_from: Mapped[date] = mapped_column(Date)
     valid_to: Mapped[date] = mapped_column(Date)
@@ -191,13 +244,14 @@ class Bond(Base, Stamped):
         CheckConstraint("balance <= bond_amount", name="ck_bond_balance_le_amount"),
         CheckConstraint("valid_to >= valid_from", name="ck_bond_validity"),
         CheckConstraint("status in ('ACTIVE','CLOSED')", name="ck_bond_status"),
+        UniqueConstraint("client_id", "bond_no", name="uq_bond_client_no"),
     )
 
     def __str__(self) -> str:
         return self.bond_no
 
 
-class BondLedgerEntry(Base, Stamped):
+class BondLedgerEntry(ClientScoped, Base, Stamped):
     """One debit or credit (or zero-value memo) against a bond."""
 
     __tablename__ = "bond_ledger"
@@ -222,7 +276,7 @@ class BondLedgerEntry(Base, Stamped):
 
 
 # ---------------------------------------------------------------- imports
-class ImportInvoice(Base, Stamped):
+class ImportInvoice(ClientScoped, Base, Stamped):
     __tablename__ = "import_invoices"
     id: Mapped[int] = mapped_column(primary_key=True)
     invoice_no: Mapped[str] = mapped_column(String(64))
@@ -273,7 +327,7 @@ class ImportInvoice(Base, Stamped):
         return sum((l.duty_total for l in self.lines), Decimal("0"))
 
 
-class ImportLine(Base):
+class ImportLine(ClientScoped, Base):
     __tablename__ = "import_lines"
     id: Mapped[int] = mapped_column(primary_key=True)
     invoice_id: Mapped[int] = mapped_column(ForeignKey("import_invoices.id", ondelete="CASCADE"))
@@ -321,7 +375,7 @@ class ImportLine(Base):
     )
 
 
-class ImportLot(Base, Stamped):
+class ImportLot(ClientScoped, Base, Stamped):
     """Stock created by a posted import line. FIFO unit. Duty-saved under a bond,
     or duty paid (bond_id NULL, duty_paid true, duty-saved value 0)."""
 
@@ -363,10 +417,10 @@ class ImportLot(Base, Stamped):
 
 
 # ---------------------------------------------------------------- production
-class ProductionBatch(Base, Stamped):
+class ProductionBatch(ClientScoped, Base, Stamped):
     __tablename__ = "production_batches"
     id: Mapped[int] = mapped_column(primary_key=True)
-    batch_no: Mapped[str] = mapped_column(String(64), unique=True)
+    batch_no: Mapped[str] = mapped_column(String(64))
     production_date: Mapped[date] = mapped_column(Date)
     model_id: Mapped[int] = mapped_column(ForeignKey("fg_models.id"))
     bom_id: Mapped[int] = mapped_column(ForeignKey("boms.id"))
@@ -381,10 +435,11 @@ class ProductionBatch(Base, Stamped):
         back_populates="batch", order_by="ConsumptionAllocation.id"
     )
     fg_lot: Mapped["FGLot"] = relationship(back_populates="batch", uselist=False)
-    __table_args__ = (CheckConstraint("qty > 0", name="ck_batch_qty"),)
+    __table_args__ = (CheckConstraint("qty > 0", name="ck_batch_qty"),
+                      UniqueConstraint("client_id", "batch_no", name="uq_batch_client_no"))
 
 
-class FGLot(Base, Stamped):
+class FGLot(ClientScoped, Base, Stamped):
     """Finished goods produced by one batch; FIFO unit for export / DTA."""
 
     __tablename__ = "fg_lots"
@@ -402,7 +457,7 @@ class FGLot(Base, Stamped):
     )
 
 
-class ConsumptionAllocation(Base):
+class ConsumptionAllocation(ClientScoped, Base):
     """Import-lot quantity consumed by a production batch (FIFO result).
 
     The *_remaining columns track how much of this consumption is still sitting
@@ -438,10 +493,10 @@ class ConsumptionAllocation(Base):
 
 
 # ---------------------------------------------------------------- export
-class ExportShipment(Base, Stamped):
+class ExportShipment(ClientScoped, Base, Stamped):
     __tablename__ = "export_shipments"
     id: Mapped[int] = mapped_column(primary_key=True)
-    invoice_no: Mapped[str] = mapped_column(String(64), unique=True)
+    invoice_no: Mapped[str] = mapped_column(String(64))
     export_date: Mapped[date] = mapped_column(Date)
     shipping_bill_no: Mapped[str | None] = mapped_column(String(64))
     shipping_bill_date: Mapped[date | None] = mapped_column(Date)
@@ -452,9 +507,10 @@ class ExportShipment(Base, Stamped):
     lines: Mapped[list["ExportLine"]] = relationship(
         back_populates="shipment", cascade="all, delete-orphan", order_by="ExportLine.line_no"
     )
+    __table_args__ = (UniqueConstraint("client_id", "invoice_no", name="uq_export_client_invoice"),)
 
 
-class ExportLine(Base):
+class ExportLine(ClientScoped, Base):
     """line_type FG = finished detector (from FG stock); ITEM = accessory/other goods
     exported as-is from duty-saved import stock (cables, spare batteries, ...)."""
 
@@ -488,10 +544,10 @@ class ExportLine(Base):
 
 
 # ---------------------------------------------------------------- DTA
-class DTAClearance(Base, Stamped):
+class DTAClearance(ClientScoped, Base, Stamped):
     __tablename__ = "dta_clearances"
     id: Mapped[int] = mapped_column(primary_key=True)
-    clearance_no: Mapped[str] = mapped_column(String(64), unique=True)
+    clearance_no: Mapped[str] = mapped_column(String(64))
     clearance_date: Mapped[date] = mapped_column(Date)
     customer: Mapped[str | None] = mapped_column(String(128))
     be_no: Mapped[str | None] = mapped_column(String(64))  # ex-bond / DTA bill of entry
@@ -507,10 +563,11 @@ class DTAClearance(Base, Stamped):
     lines: Mapped[list["DTALine"]] = relationship(
         back_populates="clearance", cascade="all, delete-orphan", order_by="DTALine.line_no"
     )
-    __table_args__ = (CheckConstraint("status in ('PENDING','PAID')", name="ck_dta_status"),)
+    __table_args__ = (CheckConstraint("status in ('PENDING','PAID')", name="ck_dta_status"),
+                      UniqueConstraint("client_id", "clearance_no", name="uq_dta_client_no"))
 
 
-class DTALine(Base):
+class DTALine(ClientScoped, Base):
     __tablename__ = "dta_lines"
     id: Mapped[int] = mapped_column(primary_key=True)
     clearance_id: Mapped[int] = mapped_column(ForeignKey("dta_clearances.id", ondelete="CASCADE"))
@@ -536,7 +593,7 @@ class DTALine(Base):
 
 
 # ---------------------------------------------------------------- disposal trace
-class DisposalAllocation(Base):
+class DisposalAllocation(ClientScoped, Base):
     """Trace from an export / DTA line back to the duty-saved import lots it used.
 
     For FG lines fg_lot_id and consumption_id are set; for ITEM lines the stock

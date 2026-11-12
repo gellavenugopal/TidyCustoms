@@ -33,7 +33,8 @@ def env(tmp_path, monkeypatch):
 def _populate(engine):
     with Session(bind=engine) as s:
         w = World(s)
-        s.add(User(username="boss", password_hash=generate_password_hash("bosspass1"), role="admin"))
+        s.add(User(username="boss", password_hash=generate_password_hash("bosspass1"), role="admin",
+                   is_superadmin=True))
         w.import_("INV-1", date(2026, 2, 1), [w.line(w.tft, 10, 200000, 50000), w.line(w.csi, 10, 1, 1),
                                               w.line(w.pcb, 20, 1, 1), w.line(w.bat, 10, 1, 1)])
         production.produce(s, batch_no="P1", model_id=w.m4343.id, qty_units=4, production_date=date(2026, 3, 1))
@@ -206,14 +207,14 @@ def test_first_run_restore_and_admin_restore(tmp_path, monkeypatch):
     assert "B-2026-01" in c.get("/bonds").get_data(as_text=True)
 
     # admin: backup download, then restore needs the RESTORE confirmation
-    d = c.get("/admin/backup/download")
+    d = c.get("/admin/backup/download?scope=system")
     assert d.status_code == 200 and bk.describe(d.data)["format"] == bk.FORMAT
     assert "eoubond-manual-" in c.get("/admin/backup").get_data(as_text=True)
     tok = _tok(c, "/admin/backup")
     r = c.post("/admin/backup/restore", data={"_csrf": tok, "confirm": "no", "backup_file": (io.BytesIO(blob), "b.zip")},
                content_type="multipart/form-data", follow_redirects=True)
     assert "Type RESTORE" in r.get_data(as_text=True)
-    r = c.post("/admin/backup/restore", data={"_csrf": tok, "confirm": "RESTORE",
+    r = c.post("/admin/backup/restore", data={"_csrf": tok, "confirm": "RESTORE", "scope": "system",
                                               "backup_file": (io.BytesIO(blob), "b.zip")},
                content_type="multipart/form-data", follow_redirects=True)
     assert "Restored" in r.get_data(as_text=True) and "Sign in" in r.get_data(as_text=True)

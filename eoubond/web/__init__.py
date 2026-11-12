@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from .. import config, db
 from ..audit_context import set_current_user
-from ..models import Bond, User
+from ..models import Bond, Client, ClientAccess, SystemState, User
 
 ROLE_RANK = {"viewer": 0, "operator": 1, "admin": 2}
 
@@ -28,16 +28,48 @@ def create_app(database_url: str | None = None, create_all: bool = False, testin
         # GET pages only read: don't hold SQLite's write lock for the whole request
         g.db = db.SessionLocal() if request.method == "POST" else db.SessionLocal(bind=db.read_only())
         g.user = None
+        g.client = None
+        g.role = None
+        g.clients = []
         uid = session.get("uid")
+        if uid and session.get("epoch") != g.db.get(SystemState, 1).session_epoch:
+            session.clear()
+            uid = None
         if uid:
             u = g.db.get(User, uid)
             if u and u.active:
                 g.user = u
+                if u.is_superadmin:
+                    g.clients = list(g.db.scalars(select(Client).where(Client.active.is_(True)).order_by(Client.name)))
+                else:
+                    g.clients = list(g.db.scalars(select(Client).join(ClientAccess).where(
+                        ClientAccess.user_id == u.id, Client.active.is_(True)).order_by(Client.name)))
+                chosen = session.get("client_id")
+                g.client = next((c for c in g.clients if c.id == chosen), None)
+                if chosen is not None and g.client is None:
+                    session["_csrf"] = secrets.token_urlsafe(32)
+                    session.pop("client_id", None)
+                    session.pop("bond_id", None)
+                    flash("Your previous client is no longer available.", "error")
+                if g.client is None and g.clients:
+                    g.client = g.clients[0]
+                    session["client_id"] = g.client.id
+                    session.pop("bond_id", None)
+                if g.client:
+                    access = g.db.get(ClientAccess, (u.id, g.client.id))
+                    g.role = "admin" if u.is_superadmin else access.role
+                    g.db.info["client_id"] = g.client.id
         set_current_user(g.user.username if g.user else None)
         if request.method == "POST" and not app.config.get("WTF_CSRF_DISABLED"):
             token = request.form.get("_csrf")
             if not token or token != session.get("_csrf"):
                 abort(400, "Invalid or missing CSRF token - reload the page and try again")
+        if g.user and not g.client and request.endpoint and request.endpoint.startswith("main."):
+            allowed = {"main.login", "main.logout", "main.clients", "main.admin_audit", "main.change_password",
+                       "main.setup", "main.select_client"}
+            if request.endpoint not in allowed:
+                flash("You have no client access. Contact a super-admin.", "error")
+                return redirect(url_for("main.clients"))
 
     @app.teardown_request
     def _close_session(exc):
@@ -75,12 +107,15 @@ def create_app(database_url: str | None = None, create_all: bool = False, testin
     def _inject():
         csrf_value()
         bonds = []
-        if getattr(g, "user", None):
+        if getattr(g, "client", None):
             bonds = list(g.db.scalars(select(Bond).order_by(Bond.status, Bond.bond_no)))
         return dict(csrf_token=session["_csrf"], current_user=g.get("user"), all_bonds=bonds,
                     selected_bond_id=session.get("bond_id"), today=date.today(),
-                    can_edit=bool(g.get("user") and ROLE_RANK[g.user.role] >= 1),
-                    is_admin=bool(g.get("user") and g.user.role == "admin"), rules=config.get_rules(),
+                    current_client=g.get("client"), available_clients=g.get("clients", []),
+                    current_role=g.get("role"),
+                    can_edit=bool(g.get("role") and ROLE_RANK[g.role] >= 1),
+                    is_admin=bool(g.get("role") == "admin"),
+                    is_superadmin=bool(g.get("user") and g.user.is_superadmin), rules=config.get_rules(),
                     brand=config.brand())
 
     app.jinja_env.filters["money"] = fmt_money
@@ -89,7 +124,7 @@ def create_app(database_url: str | None = None, create_all: bool = False, testin
     app.jinja_env.filters["cell"] = fmt_cell
 
     app.config["MAX_CONTENT_LENGTH"] = 520 * 1024 * 1024  # backup uploads
-    from . import views_admin, views_docs, views_masters, views_reports, views_txn  # noqa: F401
+    from . import views_admin, views_clients, views_docs, views_masters, views_reports, views_txn  # noqa: F401
     from .views import bp
 
     app.register_blueprint(bp)
@@ -141,8 +176,8 @@ def role_required(role: str):
         def wrapper(*a, **kw):
             if not g.user:
                 return redirect(url_for("main.login", next=request.path))
-            if ROLE_RANK[g.user.role] < ROLE_RANK[role]:
-                flash(f"Your role ({g.user.role}) cannot do this; {role} access is needed.", "error")
+            if not g.role or ROLE_RANK[g.role] < ROLE_RANK[role]:
+                flash(f"Your role ({g.role or 'none'}) cannot do this; {role} access is needed.", "error")
                 return redirect(request.referrer or url_for("main.dashboard"))
             return fn(*a, **kw)
 

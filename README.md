@@ -25,6 +25,10 @@ production, SQLite for local development.
    work; close it to stop the app.
 4. On first start the app asks you to **create the administrator** - or to
    **restore from a backup** if you are reinstalling.
+5. Sign in as the super-admin, open **Clients**, and add each client. The
+   existing records are assigned to the editable **Existing data** client.
+   Select a client in the header, then use **Users** to create users or assign
+   existing users a role for that client.
 
 Where things are kept:
 
@@ -61,20 +65,21 @@ port 5000 in Windows Firewall, and open `http://<this-pc-name>:5000` on the othe
 * **Automatic:** while the app runs, a full backup is written to `BACKUP_DIR`
   every 24 hours and at every start (newest 60 kept). Change with
   `BACKUP_INTERVAL_HOURS` and `BACKUP_KEEP` in `.env`.
-* **Manual:** **Backup → Back up now & download** (admin), or double-click
-  `backup-now.bat`. Do this before month-end close and before updating the app.
-* **What's in a backup:** one `.zip` with every record - users and passwords,
-  masters, BOMs, mappings, bonds, ledger, stock lots, imports, production,
-  exports, DTA, the audit trail - plus your `rules.toml` rates, and a checksum.
-  A damaged or edited file is refused.
-* **Restore:** **Backup → Restore from a backup**: choose the .zip, type
-  `RESTORE`. All current data is replaced in one step (if anything fails,
-  nothing changes), and the data that was there is first saved as a
-  `before-restore` backup, so a restore can be undone.
+* **Client backup:** a client admin can download and restore the selected
+  client's business records. It excludes accounts and other clients and can
+  only be restored to the same client. Client restore leaves users and business
+  rules unchanged.
+* **System backup:** a super-admin can download and restore all clients, users,
+  permissions and rules. Automatic backups and `backup-now.bat` are system
+  backups. Restoring one replaces the entire system and signs everyone out.
+  Older single-client backups are system backups; their records become the
+  **Existing data** client and existing administrators become super-admins.
+* Restore requires typing `RESTORE` and saves a safety backup before changing
+  data. Backups have a checksum; a damaged file is refused.
 
 **After a format / on a new PC:** install Python → recover the program and
 your backups → double-click `start.bat` → the app opens on
-**Restore from a backup** → pick the newest file from the `backups` folder.
+**Restore from a backup** → pick the newest system backup from the `backups` folder.
 Everything comes back, and you sign in with your usual username.
 (Command-line alternative:
 `"%LOCALAPPDATA%\EOU Bond Tracker\venv\Scripts\python.exe" -m eoubond.cli restore <file.zip>`.)
@@ -205,17 +210,23 @@ import invoice and line.
 
 ### Audit trail
 
-An SQLAlchemy `after_flush` hook writes one `audit_log` row for every
-create / update / delete on every table: user, timestamp (UTC), table, record id,
-old values and new values as JSON (password hashes masked). The audit row is
-written on the same connection, so it commits or rolls back with the change.
-View it under **Reports → Audit trail** (filterable by table, exportable).
+An SQLAlchemy `after_flush` hook records changes in the same transaction:
+user, timestamp (UTC), table, record id, old and new values (password hashes
+masked). Client business activity appears under **Reports → Audit trail**.
+Client, user and permission changes appear under **Admin audit**, accessible
+only to super-admins.
 
 ### Roles
 
-* **admin** – everything, plus user management
+* **super-admin** – manage all clients, users, roles and system backups
+* **admin** – manage data and users for the selected client
 * **operator** – master data and transaction entry/posting
 * **viewer** – read-only screens and Excel downloads
+
+Roles are assigned separately for each client. A client admin cannot reset or
+disable a user shared with another client; only a super-admin can do that.
+Business records, reports and upload previews are isolated by selected client.
+Business rules in `config/rules.toml` are shared by all clients.
 
 ---
 

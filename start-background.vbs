@@ -12,7 +12,7 @@
 '  Optional:  start-background.vbs <port> [/nobrowser]
 ' ---------------------------------------------------------------------------
 Option Explicit
-Dim sh, fso, here, data, py, port, logf, url, q, i, arg, openBrowser, portArg
+Dim sh, fso, here, data, py, port, logf, url, q, i, arg, openBrowser, portArg, migrationResult
 
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
@@ -62,7 +62,11 @@ End If
 
 sh.CurrentDirectory = here
 ' 1. bring the database up to date (hidden, wait for it)
-sh.Run "cmd /c " & q & q & py & q & " -u -m eoubond.cli upgrade >> " & q & logf & q & " 2>&1" & q, 0, True
+migrationResult = sh.Run("cmd /c " & q & q & py & q & " -u -m eoubond.cli upgrade >> " & q & logf & q & " 2>&1" & q, 0, True)
+If migrationResult <> 0 Then
+    MsgBox "Database upgrade failed. The app was not started." & vbCrLf & "See the log:" & vbCrLf & logf, 48, "EOU Bond Tracker"
+    WScript.Quit 1
+End If
 ' 2. start the app (hidden, keep running)
 sh.Run "cmd /c " & q & q & py & q & " -u -m eoubond.cli serve" & portArg & " >> " & q & logf & q & " 2>&1" & q, 0, False
 

@@ -21,6 +21,13 @@
   </a>
   {% if brand.credit %}<div class="credit"><small>{{ brand.credit_label }}</small><b>{{ brand.credit }}</b></div>{% endif %}
   <div class="right">
+    {% if current_client %}
+    <form method="post" action="{{ url_for('main.select_client') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <select name="client_id" onchange="this.form.submit()" title="Working client" aria-label="Working client">
+        {% for c in available_clients %}<option value="{{ c.id }}" {{ 'selected' if c.id == current_client.id }}>{{ c.code }} - {{ c.name }}</option>{% endfor %}
+      </select>
+    </form>
     <form method="post" action="{{ url_for('main.select_bond') }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <select name="bond_id" onchange="this.form.submit()" title="Working bond (default for entries and reports)" aria-label="Working bond">
@@ -28,8 +35,9 @@
         {% for b in all_bonds %}<option value="{{ b.id }}" {{ 'selected' if b.id == selected_bond_id }}>{{ b.bond_no }}{{ ' (closed)' if b.status == 'CLOSED' }}</option>{% endfor %}
       </select>
     </form>
+    {% endif %}
     <span class="userchip"><span class="av">{{ current_user.username[:1]|upper }}</span>
-      <a href="{{ url_for('main.change_password') }}" style="color:inherit">{{ current_user.username }} · {{ current_user.role }}</a></span>
+      <a href="{{ url_for('main.change_password') }}" style="color:inherit">{{ current_user.username }} · {{ 'super-admin' if is_superadmin else (current_role or 'no client access') }}</a></span>
     <form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="link">Log out</button></form>
   </div>
 </div></header>
@@ -46,9 +54,13 @@
     ('main.form3_return', '☰', 'Form III', ep == 'main.form3_return'),
     ('main.items', '▦', 'Masters', ep in masters_eps or (ep.startswith('main.doc_') and kind_arg == 'boms')),
   ] %}
-  {% for endpoint, icon, label, on in modules %}
+  {% if current_client %}{% for endpoint, icon, label, on in modules %}
   <a href="{{ url_for(endpoint) }}" class="{{ 'on' if on }}" {{ 'aria-current="page"'|safe if on }}><span class="ic" aria-hidden="true">{{ icon }}</span>{{ label }}</a>
-  {% endfor %}
+  {% endfor %}{% endif %}
+  {% if is_superadmin %}
+  <a href="{{ url_for('main.clients') }}" class="{{ 'on' if ep=='main.clients' }}">Clients</a>
+  <a href="{{ url_for('main.admin_audit') }}" class="{{ 'on' if ep=='main.admin_audit' }}">Admin audit</a>
+  {% endif %}
   {% if is_admin %}
   <span class="sep" aria-hidden="true"></span>
   <a href="{{ url_for('main.users') }}" class="{{ 'on' if ep=='main.users' }}"><span class="ic" aria-hidden="true">☺</span>Users</a>

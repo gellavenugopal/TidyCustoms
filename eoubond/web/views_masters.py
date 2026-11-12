@@ -40,7 +40,7 @@ def items_create():
 def item_edit(item_id):
     item = g.db.get(Item, item_id) or _404()
     if request.method == "POST":
-        if g.user.role == "viewer":
+        if g.role == "viewer":
             flash("Viewers cannot edit", "error")
         elif request.form.get("action") == "delete":
             if commit_or_flash(lambda: masters.delete_row(g.db, item), "Item deleted")[0]:
@@ -65,7 +65,7 @@ def _404():
 @login_required
 def suppliers():
     if request.method == "POST":
-        if g.user.role == "viewer":
+        if g.role == "viewer":
             flash("Viewers cannot edit", "error")
         elif request.form.get("action") == "delete":
             s = g.db.get(Supplier, int(request.form["supplier_id"]))
@@ -82,7 +82,7 @@ def suppliers():
 @login_required
 def models():
     if request.method == "POST":
-        if g.user.role == "viewer":
+        if g.role == "viewer":
             flash("Viewers cannot edit", "error")
         else:
             commit_or_flash(lambda: masters.create_model(g.db, code=request.form.get("code"),
@@ -123,7 +123,7 @@ def bom_view(bom_id):
 def mappings():
     if request.method == "POST":
         f = request.form
-        if g.user.role == "viewer":
+        if g.role == "viewer":
             flash("Viewers cannot edit", "error")
         elif f.get("action") == "delete":
             m = g.db.get(DescriptionMapping, int(f["mapping_id"]))
@@ -147,7 +147,7 @@ def mappings():
 def bonds():
     if request.method == "POST":
         f = request.form
-        if g.user.role == "viewer":
+        if g.role == "viewer":
             flash("Viewers cannot edit", "error")
         else:
             commit_or_flash(lambda: bond_svc.create_bond(
@@ -164,7 +164,7 @@ def bond_view(bond_id):
     bond = g.db.get(Bond, bond_id) or _404()
     if request.method == "POST":
         f = request.form
-        if g.user.role == "viewer":
+        if g.role == "viewer":
             flash("Viewers cannot edit", "error")
         else:
             commit_or_flash(lambda: bond_svc.update_bond(

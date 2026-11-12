@@ -17,7 +17,10 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _bond_id():
-    return int_or_none(request.args.get("bond_id")) or session.get("bond_id")
+    bond_id = int_or_none(request.args.get("bond_id")) or session.get("bond_id")
+    if bond_id and not g.db.get(Bond, bond_id):
+        abort(404)
+    return bond_id
 
 
 def _ledger():

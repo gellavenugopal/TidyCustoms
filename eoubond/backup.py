@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import secrets
 import threading
 import time
 import zipfile
@@ -71,15 +72,27 @@ def schema_revision(conn) -> str | None:
 
 
 # ------------------------------------------------------------------ create
-def create_backup(engine=None) -> bytes:
+def create_backup(engine=None, *, client_id: int | None = None) -> bytes:
     engine = engine or db.engine
     data, counts = {}, {}
     # one read transaction = a consistent snapshot, without blocking other users
     with db.read_only(engine).connect() as conn, conn.begin():
         rev = schema_revision(conn)
+        if client_id is not None:
+            from .models import Client
+            client_key = conn.execute(select(Client.backup_id).where(Client.id == client_id)).scalar_one_or_none()
+            if not client_key:
+                raise BackupError("Client not found")
         for t in _tables():
+            if client_id is not None and "client_id" not in t.c:
+                continue
+            if client_id is not None and t.name == "client_access":
+                continue
+            query = select(t).order_by(*t.primary_key.columns)
+            if client_id is not None:
+                query = query.where(t.c.client_id == client_id)
             rows = [{k: _enc(v) for k, v in r._mapping.items()}
-                    for r in conn.execute(select(t).order_by(*t.primary_key.columns))]
+                    for r in conn.execute(query)]
             data[t.name] = rows
             counts[t.name] = len(rows)
     payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
@@ -87,12 +100,14 @@ def create_backup(engine=None) -> bytes:
                     created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     database=engine.dialect.name, row_counts=counts,
                     sha256=hashlib.sha256(payload).hexdigest())
+    if client_id is not None:
+        manifest.update(scope="client", client_id=client_id, client_key=client_key)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("manifest.json", json.dumps(manifest, indent=2))
         z.writestr("data.json", payload)
         rules = Path(config.rules_file())
-        if rules.exists():
+        if client_id is None and rules.exists():
             z.write(rules, "rules.toml")
     return buf.getvalue()
 
@@ -142,12 +157,38 @@ def describe(blob: bytes) -> dict:
 
 # ------------------------------------------------------------------ restore
 def restore_backup(blob: bytes, *, restore_rules: bool = True, engine=None, safety_copy: bool = True,
-                   restored_by: str = "system") -> dict:
+                   restored_by: str = "system", client_id: int | None = None) -> dict:
     """Replace all data with the backup's. Atomic. Returns a summary."""
     engine = engine or db.engine
     manifest, data, rules = read_backup(blob)
     tables = _tables()
     known = {t.name: t for t in tables}
+    if client_id is None and manifest.get("scope") == "client":
+        raise BackupError("A client backup cannot replace the entire system")
+    if client_id is not None:
+        from .models import Client
+        with db.read_only(engine).connect() as conn:
+            client_key = conn.execute(select(Client.backup_id).where(Client.id == client_id)).scalar_one_or_none()
+        if (not client_key or manifest.get("scope") != "client" or manifest.get("client_id") != client_id
+                or manifest.get("client_key") != client_key):
+            raise BackupError("This backup is not for the selected client")
+        tables = [t for t in tables if "client_id" in t.c and t.name != "client_access"]
+        expected = {t.name for t in tables}
+        if set(data) != expected or any(row.get("client_id") != client_id
+                                        for rows in data.values() for row in rows):
+            raise BackupError("Client backup contains invalid or incomplete data")
+        restore_rules = False
+    elif "clients" not in data:
+        data["clients"] = [dict(id=1, name="Existing data", active=True, backup_id=secrets.token_urlsafe(32),
+                                created_at=datetime.now(timezone.utc).isoformat())]
+        for row in data.get("users", []):
+            row["is_superadmin"] = row.get("role") == "admin"
+        data["client_access"] = [dict(user_id=row["id"], client_id=1, role=row["role"])
+                                 for row in data.get("users", [])]
+        for table in tables:
+            if "client_id" in table.c and table.name != "client_access":
+                for row in data.get(table.name, []):
+                    row["client_id"] = 1
     unknown = set(data) - set(known)
     if unknown:
         raise BackupError(f"Backup is from a newer version of the app (tables {', '.join(sorted(unknown))}); "
@@ -162,13 +203,22 @@ def restore_backup(blob: bytes, *, restore_rules: bool = True, engine=None, safe
     safety = None
     if safety_copy:
         try:
-            safety = write_backup(kind="before-restore", engine=engine)
-        except OSError:
-            safety = None  # e.g. backup folder unavailable - restore still proceeds
+            if client_id is None:
+                safety = write_backup(kind="before-restore", engine=engine)
+            else:
+                directory = config.backup_dir()
+                directory.mkdir(parents=True, exist_ok=True)
+                safety = directory / f"eoubond-client-{client_id}-before-restore-{datetime.now():%Y%m%d-%H%M%S}.zip"
+                safety.write_bytes(create_backup(engine, client_id=client_id))
+        except OSError as exc:
+            raise BackupError("Could not save the safety backup; restore was not started") from exc
 
     with engine.begin() as conn:
         for t in reversed(tables):
-            conn.execute(delete(t))
+            statement = delete(t)
+            if client_id is not None:
+                statement = statement.where(t.c.client_id == client_id)
+            conn.execute(statement)
         for t in tables:
             rows = data.get(t.name) or []
             if not rows:
@@ -177,6 +227,24 @@ def restore_backup(blob: bytes, *, restore_rules: bool = True, engine=None, safe
             conv = [{k: _dec(cols[k], v) for k, v in r.items()} for r in rows]
             for i in range(0, len(conv), 500):
                 conn.execute(insert(t), conv[i:i + 500])
+        if client_id is None:
+            from .models import SystemState
+            state = SystemState.__table__
+            if conn.execute(select(state.c.id).where(state.c.id == 1)).first():
+                conn.execute(state.update().where(state.c.id == 1).values(session_epoch=secrets.token_urlsafe(32)))
+            else:
+                conn.execute(insert(state).values(id=1, session_epoch=secrets.token_urlsafe(32)))
+        for t in tables:
+            if "client_id" not in t.c or t.name == "client_access":
+                continue
+            for fk in t.foreign_keys:
+                target = fk.column.table
+                if target.name == "clients" or "client_id" not in target.c:
+                    continue
+                invalid = select(func.count()).select_from(t.join(target, fk.parent == fk.column)).where(
+                    t.c.client_id != target.c.client_id)
+                if conn.execute(invalid).scalar():
+                    raise BackupError("Backup contains references between different clients")
         if conn.dialect.name == "postgresql":
             for t in tables:
                 if "id" in t.columns:
@@ -188,6 +256,7 @@ def restore_backup(blob: bytes, *, restore_rules: bool = True, engine=None, safe
         conn.execute(insert(AuditLog), [dict(
             ts=datetime.now(timezone.utc).replace(tzinfo=None), username=restored_by, action="RESTORE",
             table_name="*", record_id=None, old_values=None,
+            client_id=client_id or 1,
             new_values=json.dumps(dict(backup_created_at=manifest.get("created_at"),
                                        app_version=manifest.get("app_version"),
                                        row_counts=manifest.get("row_counts"))))])

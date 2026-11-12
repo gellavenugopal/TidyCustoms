@@ -6,8 +6,8 @@ PostgreSQL: services lock bond and lot rows with SELECT ... FOR UPDATE.
 """
 from __future__ import annotations
 
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy import create_engine, event, inspect, select, text
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker, with_loader_criteria
 from sqlalchemy.pool import StaticPool
 
 from . import config
@@ -70,4 +70,68 @@ def init_engine(url: str | None = None, create_all: bool = False):
         from . import models  # noqa: F401  (register tables)
 
         Base.metadata.create_all(engine)
+        with engine.begin() as conn:
+            if not conn.execute(select(models.Client.id).where(models.Client.id == 1)).first():
+                conn.execute(models.Client.__table__.insert().values(id=1, name="Existing data"))
+                if conn.dialect.name == "postgresql":
+                    conn.execute(text("SELECT setval(pg_get_serial_sequence('clients', 'id'), 1, true)"))
+            if not conn.execute(select(models.SystemState.id).where(models.SystemState.id == 1)).first():
+                conn.execute(models.SystemState.__table__.insert().values(id=1))
     return engine
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _scope_client_queries(state):
+    client_id = state.session.info.get("client_id")
+    if client_id is None:
+        return
+    if not state.is_select:
+        raise ValueError("Bulk database changes are not allowed in a client session")
+    from .models import ClientScoped
+
+    state.statement = state.statement.options(
+        with_loader_criteria(ClientScoped, lambda cls: cls.client_id == client_id, include_aliases=True)
+    )
+
+
+@event.listens_for(Session, "before_flush")
+def _scope_client_writes(session, _ctx, _instances):
+    client_id = session.info.get("client_id")
+    if client_id is None:
+        return
+    from .models import ClientScoped
+    from .services.errors import ValidationError
+
+    pending = []
+    for obj in session.new.union(session.dirty).union(session.deleted):
+        if not isinstance(obj, ClientScoped):
+            continue
+        if obj in session.new and obj.client_id is None:
+            obj.client_id = client_id
+        if obj.client_id != client_id:
+            raise ValidationError("The record does not belong to the selected client")
+        if obj not in session.deleted:
+            pending.append(obj)
+    session.info["_client_pending"] = pending
+
+
+@event.listens_for(Session, "after_flush_postexec")
+def _check_client_references(session, _ctx):
+    client_id = session.info.get("client_id")
+    if client_id is None:
+        return
+    from .services.errors import ValidationError
+
+    conn = session.connection()
+    for obj in session.info.pop("_client_pending", []):
+        for column in inspect(obj).mapper.local_table.columns:
+            value = getattr(obj, column.key)
+            if value is None:
+                continue
+            for fk in column.foreign_keys:
+                target = fk.column.table
+                if target.name == "clients" or "client_id" not in target.c:
+                    continue
+                owner = conn.execute(select(target.c.client_id).where(fk.column == value)).scalar_one_or_none()
+                if owner != client_id:
+                    raise ValidationError("A referenced record does not belong to the selected client")

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Administration audit</h1>
+<p class="sub">Most recent 500 changes to clients, users and access. Password hashes are masked.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Time (UTC)</th><th>User</th><th>Action</th><th>Table</th><th>Record</th><th>Old values</th><th>New values</th></tr></thead>
+<tbody>{% for e in entries %}
+<tr><td>{{ e.ts }}</td><td>{{ e.username or '' }}</td><td>{{ e.action }}</td><td>{{ e.table_name }}</td>
+  <td>{{ e.record_id or '' }}</td><td>{{ e.old_values or '' }}</td><td>{{ e.new_values or '' }}</td></tr>
+{% else %}<tr><td colspan="7">No administration changes yet.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

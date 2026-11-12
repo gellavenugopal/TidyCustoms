@@ -15,10 +15,11 @@ from sqlalchemy import event, inspect, insert
 from sqlalchemy.orm import Session
 
 from .audit_context import current_username
-from .models import AuditLog, _now
+from .models import AdminAuditLog, AuditLog, _now
 
-MASKED_COLUMNS = {"password_hash"}
-SKIP_TABLES = {AuditLog.__tablename__}
+MASKED_COLUMNS = {"password_hash", "backup_id", "session_epoch"}
+SKIP_TABLES = {AuditLog.__tablename__, AdminAuditLog.__tablename__}
+ADMIN_TABLES = {"clients", "client_access", "users", "system_state"}
 
 
 def _jsonable(value):
@@ -67,10 +68,9 @@ def _changes(obj) -> tuple[dict, dict]:
 
 
 def _pk(obj) -> str:
-    ident = inspect(obj).identity
-    if ident:
-        return ",".join(str(i) for i in ident)
-    return str(getattr(obj, "id", ""))
+    state = inspect(obj)
+    ident = state.identity or tuple(getattr(obj, col.key) for col in state.mapper.primary_key)
+    return ",".join(str(i) for i in ident)
 
 
 @event.listens_for(Session, "after_flush")
@@ -102,4 +102,12 @@ def _audit_after_flush(session: Session, _ctx):
                          record_id=_pk(obj), old_values=json.dumps(_column_values(obj, "old")),
                          new_values=None))
     if rows:
-        session.connection().execute(insert(AuditLog), rows)
+        client_id = session.info.get("client_id", 1)
+        admin_rows = [row for row in rows if row["table_name"] in ADMIN_TABLES]
+        client_rows = [row for row in rows if row["table_name"] not in ADMIN_TABLES]
+        for row in client_rows:
+            row["client_id"] = client_id
+        if client_rows:
+            session.connection().execute(insert(AuditLog), client_rows)
+        if admin_rows:
+            session.connection().execute(insert(AdminAuditLog), admin_rows)
